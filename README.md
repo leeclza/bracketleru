@@ -16,7 +16,8 @@ Cocok untuk turnamen game (Tekken, eFootball, Mobile Legends, dan lain-lain), ol
 - **Klasemen otomatis** untuk round robin, swiss, dan grup
 - **Login Google khusus email `@student.itera.ac.id`**, lalu wajib isi username. Hanya pembuat turnamen yang bisa mengisi skor dan mengedit
 - **Link tonton publik**: penonton bisa buka `/t/:id` tanpa login, dan halamannya refresh otomatis
-- **Export PDF** bracket dan klasemen
+- **Export PDF**: bracket digambar sebagai bagan bergaris (halaman landscape), klasemen sebagai tabel
+- **Hapus otomatis** setelah 7 hari tanpa perubahan, dengan countdown di profil
 - Tampilan hitam putih yang nyaman di desktop dan HP
 
 ## Tech stack
@@ -100,7 +101,9 @@ Hanya akun Google dengan email **`@student.itera.ac.id`** yang bisa login. Email
 
 Setelah login pertama, user **wajib mengisi username** (3–20 karakter: huruf kecil, angka, titik, underscore; unik). Username disimpan di tabel `users` dan tampil di pojok kanan atas.
 
-Penonton tetap bisa membuka link tonton `/t/:id` tanpa login.
+Penonton tetap bisa membuka link tonton `/t/:id` tanpa login. Halaman penonton tidak refresh otomatis, jadi ada tombol **Muat skor terbaru** supaya hemat request.
+
+
 
 ## Test
 

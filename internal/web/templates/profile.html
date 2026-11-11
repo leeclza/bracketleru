@@ -1,0 +1,23 @@
+{{template "head" (dict "Title" "Profil" "User" .User "AuthReady" true)}}
+<section class="login-box profile">
+  <div class="avatar">{{slice .User.Username 0 1}}</div>
+  <h1>@{{.User.Username}}</h1>
+  <p class="hint">{{.User.Name}}<br>{{.User.Email}}</p>
+
+  <div class="side-section">
+    <h2>Turnamen kamu ({{len .Mine}})</h2>
+    {{if .Mine}}
+    <ul class="mine">
+      {{range .Mine}}
+      <li><a href="{{.URL}}">{{.Name}}<small class="countdown" data-expires="{{.Expires}}">akan dihapus dalam …</small></a>
+        {{if .Complete}}<span class="tag ok">Selesai</span>{{else}}<span class="tag live">Jalan</span>{{end}}</li>
+      {{end}}
+    </ul>
+    {{else}}
+    <p class="hint">Belum ada. <a href="/">Bikin sekarang</a></p>
+    {{end}}
+  </div>
+
+  <form method="post" action="/logout" class="sep"><button class="btn big">Logout</button></form>
+</section>
+{{template "foot"}}

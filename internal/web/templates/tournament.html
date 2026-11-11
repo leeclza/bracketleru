@@ -1,4 +1,4 @@
-{{template "head" (dict "Title" .T.Name "Refresh" (not .Admin) "App" true "User" .User "AuthReady" .AuthReady)}}
+{{template "head" (dict "Title" .T.Name "App" true "User" .User "AuthReady" .AuthReady)}}
 
 <aside class="sidebar">
   <div>
@@ -23,6 +23,7 @@
   <div class="side-section">
     <p>♟️ {{.View.SwissInfo}}</p>
     {{if and .Admin .View.CanSwissNext}}
+    <form method="post" action="/t/{{.T.ID}}/swiss-next">
       <button class="btn primary big">Mulai ronde berikutnya →</button></form>
     {{end}}
   </div>
@@ -30,11 +31,13 @@
 
   {{if .View.WaitPlayoff}}<p class="hint">Playoff bisa dimulai setelah semua pertandingan grup selesai. Baris hijau = lolos.</p>{{end}}
   {{if and .Admin .View.CanPlayoff}}
+  <form class="side-section" method="post" action="/t/{{.T.ID}}/playoff">
     <p>✅ Fase grup selesai!</p><button class="btn primary big">Mulai playoff →</button></form>
   {{end}}
 
   {{if .Admin}}
   <p class="hint">Klik kartu pertandingan di bracket buat isi / ubah skor.</p>
+  <p class="hint expiry">⏳ Dihapus otomatis <span class="countdown" data-expires="{{.Expires}}" data-prefix="dalam ">…</span> kalau gak ada perubahan (7 hari sejak update terakhir).</p>
 
   <details class="side-section" open>
     <summary>🔗 Link tonton</summary>
@@ -66,7 +69,8 @@
     </form>
   </details>
   {{else}}
-  <p class="hint">Mode penonton · refresh otomatis tiap 20 detik</p>
+  <p class="hint">Mode penonton</p>
+  <button type="button" class="btn big" data-reload>↻ Muat skor terbaru</button>
   {{end}}
 
   <a class="btn big" href="/t/{{.T.ID}}/pdf">📄 Download PDF</a>

@@ -80,18 +80,17 @@ func (s *server) pdf(c *gin.Context) {
 			standingsTable(pdf, tr, b.Table)
 		}
 		if b.Section != nil {
-			heading(pdf, b.Title)
-			matchList(pdf, tr, b.Section)
+			if b.Section.Bracket {
+				// bracket gugur (mis. playoff): gambar bagan
+				drawBoard(pdf, tr, b.Title, []*sectionView{b.Section}, nil)
+			} else {
+				// round robin / swiss / grup: daftar pertandingan
+				heading(pdf, b.Title)
+				matchList(pdf, tr, b.Section)
+			}
 		}
 		if b.Board != nil {
-			secs := b.Board.Main
-			if b.Board.Final != nil {
-				secs = append(secs, b.Board.Final)
-			}
-			for _, s := range secs {
-				heading(pdf, s.Title)
-				matchList(pdf, tr, s)
-			}
+			drawBoard(pdf, tr, b.Title, b.Board.Main, b.Board.Final)
 		}
 	}
 

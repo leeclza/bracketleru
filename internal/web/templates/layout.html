@@ -4,7 +4,6 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>{{.Title}} · Bracket Leru</title>
-  {{if .Refresh}}<meta http-equiv="refresh" content="20">{{end}}
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;800&display=swap" rel="stylesheet">
@@ -19,7 +18,7 @@
     <div class="nav-right">
       {{if .User}}
       <a href="/" class="btn small">+ Turnamen baru</a>
-      <span class="who" title="{{.User.Email}}">@{{.User.Username}}</span>
+      <a href="/profile" class="who" title="{{.User.Email}}">@{{.User.Username}}</a>
       <form method="post" action="/logout"><button class="btn small">Logout</button></form>
       {{else if .AuthReady}}
       <a href="/login" class="btn small primary">Login Google</a>
@@ -111,7 +110,8 @@
     <span class="num">{{.Num}}</span>
   </summary>
   {{if and .Admin .Ready}}
-  <div class="score-pop">
+  <div class="score-pop" role="dialog" aria-label="Isi skor match {{.Num}}">
+    <p class="pop-title">Match #{{.Num}} · isi skor <button type="button" class="pop-close" data-close aria-label="Tutup">✕</button></p>
     <form method="post" action="{{.Action}}" class="score-form">
       <label><span>{{.A.Name}}</span><input type="number" name="a" min="0" value="{{if .Done}}{{.ScoreA}}{{end}}" required inputmode="numeric"></label>
       <label><span>{{.B.Name}}</span><input type="number" name="b" min="0" value="{{if .Done}}{{.ScoreB}}{{end}}" required inputmode="numeric"></label>

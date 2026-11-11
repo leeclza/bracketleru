@@ -52,6 +52,7 @@ func New(st store.Store) *gin.Engine {
 	r.POST("/username", s.usernamePage)
 	r.POST("/logout", s.logout)
 	r.GET("/", s.home)
+	r.GET("/profile", s.profile)
 	r.POST("/new", s.create)
 	r.POST("/preview", s.preview)
 
@@ -143,22 +144,35 @@ func (s *server) save(c *gin.Context, t *bracket.Tournament) bool {
 
 type mineItem struct {
 	Name, Format, URL string
+	Expires           int64 // unix milidetik, buat countdown
 	Complete          bool
+}
+
+func (s *server) mine(c *gin.Context, u *User) []mineItem {
+	if u == nil {
+		return nil
+	}
+	ts, err := s.store.ListByOwner(c.Request.Context(), u.ID, 30)
+	if err != nil {
+		log.Println("list turnamen:", err)
+	}
+	var items []mineItem
+	for _, t := range ts {
+		_, done := t.Podium(t.Build())
+		items = append(items, mineItem{Name: t.Name, Format: t.FormatName(), URL: adminURL(t), Complete: done, Expires: store.ExpiresAt(t).UnixMilli()})
+	}
+	return items
+}
+
+// profile: halaman simpel buat liat akun sendiri.
+func (s *server) profile(c *gin.Context) {
+	u := s.currentUser(c) // requireLogin udah mastiin login + punya username
+	c.HTML(http.StatusOK, "profile.html", gin.H{"User": u, "Mine": s.mine(c, u)})
 }
 
 func (s *server) home(c *gin.Context) {
 	u := s.currentUser(c)
-	var items []mineItem
-	if u != nil {
-		ts, err := s.store.ListByOwner(c.Request.Context(), u.ID, 30)
-		if err != nil {
-			log.Println("list turnamen:", err)
-		}
-		for _, t := range ts {
-			_, done := t.Podium(t.Build())
-			items = append(items, mineItem{Name: t.Name, Format: t.FormatName(), URL: adminURL(t), Complete: done})
-		}
-	}
+	items := s.mine(c, u)
 	c.HTML(http.StatusOK, "home.html", gin.H{
 		"User":      u,
 		"AuthReady": s.auth != nil,
@@ -254,6 +268,7 @@ func (s *server) show(c *gin.Context) {
 		"AuthReady": s.auth != nil,
 		"View":      buildView(t, admin),
 		"PublicURL": baseURL(c, s.auth) + "/t/" + t.ID,
+		"Expires":   store.ExpiresAt(t).UnixMilli(),
 		"Error":     c.Query("err"),
 	})
 }

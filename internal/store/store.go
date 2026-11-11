@@ -49,6 +49,22 @@ func sortNewest(ts []*bracket.Tournament, limit int) []*bracket.Tournament {
 	return ts
 }
 
+// TTL: turnamen yang gak diubah selama ini dihapus otomatis.
+const TTL = 7 * 24 * time.Hour
+
+// LastActive: kapan terakhir turnamen diubah (data lama belum punya UpdatedAt).
+func LastActive(t *bracket.Tournament) time.Time {
+	if t.UpdatedAt.IsZero() {
+		return t.CreatedAt
+	}
+	return t.UpdatedAt
+}
+
+// ExpiresAt: kapan turnamen bakal dihapus kalau gak ada perubahan lagi.
+func ExpiresAt(t *bracket.Tournament) time.Time { return LastActive(t).Add(TTL) }
+
+func expired(t *bracket.Tournament) bool { return time.Now().After(ExpiresAt(t)) }
+
 var validID = regexp.MustCompile(`^[a-z0-9]{4,32}$`)
 
 // ---------- FileStore ----------
@@ -81,10 +97,18 @@ func (s *FileStore) Get(_ context.Context, id string) (*bracket.Tournament, erro
 		return nil, err
 	}
 	var t bracket.Tournament
-	return &t, json.Unmarshal(data, &t)
+	if err := json.Unmarshal(data, &t); err != nil {
+		return nil, err
+	}
+	if expired(&t) {
+		os.Remove(s.path(id))
+		return nil, ErrNotFound
+	}
+	return &t, nil
 }
 
 func (s *FileStore) Save(_ context.Context, t *bracket.Tournament) error {
+	t.UpdatedAt = time.Now()
 	data, err := json.Marshal(t)
 	if err != nil {
 		return err
@@ -120,7 +144,14 @@ func (s *FileStore) ListByOwner(_ context.Context, ownerID string, limit int) ([
 			continue
 		}
 		var t bracket.Tournament
-		if json.Unmarshal(data, &t) == nil && t.OwnerID == ownerID {
+		if json.Unmarshal(data, &t) != nil || t.ID == "" {
+			continue
+		}
+		if expired(&t) {
+			os.Remove(filepath.Join(s.dir, e.Name()))
+			continue
+		}
+		if t.OwnerID == ownerID {
 			out = append(out, &t)
 		}
 	}
@@ -178,7 +209,22 @@ func (s *FileStore) SetUsername(_ context.Context, userID, email, username strin
 // ---------- SQLStore (Postgres, mis. Neon) ----------
 
 type SQLStore struct {
-	db *sql.DB
+	db        *sql.DB
+	mu        sync.Mutex
+	lastPurge time.Time
+}
+
+// purge hapus semua turnamen kedaluwarsa, maksimal sekali per jam per instance
+// (Vercel gak punya cron gratis, jadi dipanggil waktu ada request).
+func (s *SQLStore) purge(ctx context.Context) {
+	s.mu.Lock()
+	if time.Since(s.lastPurge) < time.Hour {
+		s.mu.Unlock()
+		return
+	}
+	s.lastPurge = time.Now()
+	s.mu.Unlock()
+	s.db.ExecContext(ctx, `DELETE FROM tournaments WHERE updated_at < $1`, time.Now().Add(-TTL).Unix())
 }
 
 // NewSQLStore nyambung ke Postgres.
@@ -251,10 +297,18 @@ func (s *SQLStore) Get(ctx context.Context, id string) (*bracket.Tournament, err
 		return nil, err
 	}
 	var t bracket.Tournament
-	return &t, json.Unmarshal([]byte(data), &t)
+	if err := json.Unmarshal([]byte(data), &t); err != nil {
+		return nil, err
+	}
+	if expired(&t) {
+		s.Delete(ctx, id)
+		return nil, ErrNotFound
+	}
+	return &t, nil
 }
 
 func (s *SQLStore) Save(ctx context.Context, t *bracket.Tournament) error {
+	t.UpdatedAt = time.Now()
 	data, err := json.Marshal(t)
 	if err != nil {
 		return err
@@ -262,11 +316,12 @@ func (s *SQLStore) Save(ctx context.Context, t *bracket.Tournament) error {
 	_, err = s.db.ExecContext(ctx,
 		`INSERT INTO tournaments (id, owner_id, data, updated_at) VALUES ($1, $2, $3, $4)
 		 ON CONFLICT (id) DO UPDATE SET owner_id = EXCLUDED.owner_id, data = EXCLUDED.data, updated_at = EXCLUDED.updated_at`,
-		t.ID, t.OwnerID, string(data), time.Now().Unix())
+		t.ID, t.OwnerID, string(data), t.UpdatedAt.Unix())
 	return err
 }
 
 func (s *SQLStore) ListByOwner(ctx context.Context, ownerID string, limit int) ([]*bracket.Tournament, error) {
+	s.purge(ctx)
 	rows, err := s.db.QueryContext(ctx,
 		`SELECT data FROM tournaments WHERE owner_id = $1 ORDER BY updated_at DESC LIMIT $2`, ownerID, limit)
 	if err != nil {
@@ -280,7 +335,7 @@ func (s *SQLStore) ListByOwner(ctx context.Context, ownerID string, limit int) (
 			return nil, err
 		}
 		var t bracket.Tournament
-		if json.Unmarshal([]byte(data), &t) == nil {
+		if json.Unmarshal([]byte(data), &t) == nil && !expired(&t) {
 			out = append(out, &t)
 		}
 	}

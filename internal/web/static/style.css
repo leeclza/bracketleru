@@ -163,7 +163,7 @@ details.side-section[open] > summary { margin-bottom: 12px; }
   body.app { height: auto; overflow: visible; }
   .workspace { display: block; }
   .sidebar { border-right: 0; border-bottom: 1px solid var(--border); }
-  .stage { overflow: visible; padding: 16px; }
+  .stage { overflow-x: auto; overflow-y: visible; padding: 16px; }
 }
 
 .mine { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
@@ -172,7 +172,8 @@ details.side-section[open] > summary { margin-bottom: 12px; }
 
 /* pilihan format: chip kecil di sidebar */
 .formats { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
-.format input { position: absolute; opacity: 0; pointer-events: none; }
+.format { position: relative; }
+.format input { position: absolute; opacity: 0; pointer-events: none; width: 1px; height: 1px; left: 0; top: 0; }
 .format-card { display: block; height: 100%; padding: 8px 10px; border: 1px solid var(--border); border-radius: 8px; background: rgba(0, 0, 0, 0.2); cursor: pointer; font-size: 13px; }
 .format-card small { display: none; }
 .format input:checked + .format-card { border-color: var(--accent); background: rgba(255, 255, 255, 0.18); }
@@ -197,7 +198,7 @@ details.side-section[open] > summary { margin-bottom: 12px; }
 .block > h2 { font-size: 18px; margin-bottom: 14px; padding-left: 10px; border-left: 4px solid var(--accent); }
 
 /* bracket gugur: kolom per ronde, garis SVG digambar app.js */
-.board-scroll { overflow-x: auto; padding-bottom: 12px; }
+.board-scroll { padding-bottom: 12px; } /* gak scroll sendiri: yang scroll cuma .stage */
 .board { position: relative; display: flex; align-items: center; gap: 44px; width: max-content; padding: 4px; }
 .board-main { display: flex; flex-direction: column; gap: 28px; }
 .bsec-title { font-size: 13px; font-weight: 700; color: #e5e5e5; margin-bottom: 8px; }
@@ -211,7 +212,7 @@ details.side-section[open] > summary { margin-bottom: 12px; }
 .bracket .round-matches { flex: 1; display: flex; flex-direction: column; justify-content: space-around; gap: 12px; }
 .wires { position: absolute; left: 0; top: 0; pointer-events: none; overflow: visible; z-index: 0; }
 .wires path { fill: none; stroke: rgba(255, 255, 255, 0.22); stroke-width: 2; }
-.wires path.on { stroke: rgba(196, 181, 253, 0.75); }
+.wires path.on { stroke: rgba(229, 229, 229, 0.75); }
 .board .match { z-index: 1; }
 
 /* list: round robin / swiss / grup */
@@ -239,10 +240,20 @@ details.side-section[open] > summary { margin-bottom: 12px; }
 .side.lose .pname { color: var(--muted); }
 .side.tbd .pname { color: #737373; font-style: italic; }
 
+/* form skor: dialog melayang di luar bracket (gak kepotong scroll) */
 .score-pop {
-  position: absolute; top: calc(100% + 6px); left: 0; z-index: 10; width: 240px;
-  padding: 12px; border-radius: 12px; background: #1a1a1a; border: 1px solid var(--accent);
-  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.5);
+  position: fixed; left: 50%; top: 50%; transform: translate(-50%, -50%); z-index: 100;
+  width: min(340px, calc(100vw - 32px)); padding: 18px; border-radius: 14px;
+  background: #1a1a1a; border: 1px solid var(--border);
+  box-shadow: 0 0 0 100vmax rgba(0, 0, 0, 0.65), 0 20px 50px rgba(0, 0, 0, 0.6);
+}
+.score-pop .pop-title { font-size: 13px; color: var(--muted); margin: 0 0 12px; }
+.score-form { font-size: 15px; }
+.score-form label { font-size: 15px !important; }
+.score-form input { width: 76px !important; padding: 10px !important; font-size: 18px !important; }
+@media (max-width: 640px) {
+  /* HP: bottom sheet */
+  .score-pop { top: auto; bottom: 0; left: 0; transform: none; width: 100%; border-radius: 18px 18px 0 0; padding: 20px 16px calc(20px + env(safe-area-inset-bottom)); }
 }
 .score-form { display: grid; gap: 8px; }
 .score-form label { display: flex; align-items: center; justify-content: space-between; gap: 8px; font-size: 13px; }
@@ -276,3 +287,39 @@ details.side-section[open] > summary { margin-bottom: 12px; }
 .login-box .hint { margin-bottom: 20px; }
 .hero h1 { font-size: 20px; margin-bottom: 16px; }
 .google-btn { gap: 10px; }
+main.busy { cursor: progress; }
+main.busy .stage, main.busy .sidebar { opacity: 0.7; transition: opacity 0.15s; }
+
+/* profil */
+a.who { text-decoration: none; }
+a.who:hover { color: var(--text); }
+.profile { text-align: center; }
+.profile .avatar { width: 64px; height: 64px; margin: 0 auto 12px; border-radius: 50%; display: grid; place-items: center; font-size: 28px; font-weight: 800; text-transform: uppercase; background: var(--text); color: var(--bg); }
+.profile .side-section { text-align: left; margin-top: 20px; }
+
+/* scrollbar tipis & gelap di area bracket */
+.stage, .sidebar { scrollbar-width: thin; scrollbar-color: #3a3a3a transparent; }
+.stage::-webkit-scrollbar, .sidebar::-webkit-scrollbar { width: 8px; height: 8px; }
+.stage::-webkit-scrollbar-thumb, .sidebar::-webkit-scrollbar-thumb { background: #3a3a3a; border-radius: 8px; }
+.stage::-webkit-scrollbar-track, .sidebar::-webkit-scrollbar-track { background: transparent; }
+.score-pop .pop-title { display: flex; justify-content: space-between; align-items: center; }
+.pop-close { background: none; border: 0; color: var(--muted); font-size: 18px; cursor: pointer; padding: 0 4px; }
+.pop-close:hover { color: var(--text); }
+
+/* pengaman: halaman gak boleh melebar ke samping (yang boleh scroll cuma area bracket) */
+html { overflow-x: clip; }
+@media (max-width: 420px) {
+  .topbar { padding: 10px 12px; }
+  .logo { font-size: 17px; }
+  .nav-right { gap: 6px; }
+  .nav-right .btn.small { padding: 6px 9px; font-size: 12px; }
+}
+
+/* countdown hapus otomatis */
+.countdown { color: var(--muted); font-weight: 400; font-variant-numeric: tabular-nums; }
+.mine small.countdown { display: block; font-size: 11px; margin-top: 2px; overflow: hidden; text-overflow: ellipsis; }
+.expiry { margin: 0; }
+.mine li { min-width: 0; }
+.mine a { min-width: 0; }
+.mine .tag { flex-shrink: 0; }
+.mine small.countdown { white-space: normal; }

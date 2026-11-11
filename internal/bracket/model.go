@@ -71,6 +71,7 @@ type Tournament struct {
 	Settings     Settings       `json:"settings"`
 	Participants []string       `json:"participants"` // urutan = seed
 	CreatedAt    time.Time      `json:"createdAt"`
+	UpdatedAt    time.Time      `json:"updatedAt,omitempty"` // diisi store tiap Save
 	Results      map[int]Result `json:"results"`
 	SwissPairs   [][][2]int     `json:"swissPairs,omitempty"`   // pairing tiap ronde Swiss
 	Groups       [][]int        `json:"groups,omitempty"`       // index peserta per grup

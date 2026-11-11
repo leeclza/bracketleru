@@ -44,7 +44,9 @@ func New(st store.Store) *gin.Engine {
 	r.StaticFS("/static", http.FS(static))
 
 	s := &server{store: st, auth: loadAuthConfig()}
-	r.GET("/login", s.login)
+	r.Use(s.requireLogin)
+	r.GET("/login", s.loginPage)
+	r.GET("/login/google", s.login)
 	r.GET("/auth/callback", s.callback)
 	r.POST("/logout", s.logout)
 	r.GET("/", s.home)

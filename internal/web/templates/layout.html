@@ -8,6 +8,8 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;800&display=swap" rel="stylesheet">
+  <link rel="icon" type="image/png" href="/static/trophy.png">
+  <link rel="apple-touch-icon" href="/static/trophy.png">
   <link rel="stylesheet" href="/static/style.css">
   <script src="/static/app.js" defer></script>
 </head>
@@ -15,8 +17,8 @@
   <nav class="topbar">
     <a href="/" class="logo">Bracket<span>Leru</span></a>
     <div class="nav-right">
-      <a href="/" class="btn small">+ Turnamen baru</a>
       {{if .User}}
+      <a href="/" class="btn small">+ Turnamen baru</a>
       <span class="who" title="{{.User.Email}}">{{.User.Name}}</span>
       <form method="post" action="/logout"><button class="btn small">Logout</button></form>
       {{else if .AuthReady}}

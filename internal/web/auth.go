@@ -128,16 +128,58 @@ func (s *server) currentUser(c *gin.Context) *User {
 
 // ---------- handler ----------
 
+func safeNext(next string) string {
+	if !strings.HasPrefix(next, "/") || strings.HasPrefix(next, "//") || strings.HasPrefix(next, "/login") {
+		return "/"
+	}
+	return next
+}
+
+// requireLogin: semua halaman wajib login, kecuali halaman login itu sendiri,
+// file statis, dan link tonton (GET /t/:id & PDF-nya) biar penonton gak perlu akun.
+func (s *server) requireLogin(c *gin.Context) {
+	p := c.Request.URL.Path
+	public := p == "/login" || strings.HasPrefix(p, "/login/") || p == "/auth/callback" ||
+		strings.HasPrefix(p, "/static/") || p == "/favicon.ico"
+	if c.Request.Method == http.MethodGet && strings.HasPrefix(p, "/t/") {
+		rest := strings.TrimPrefix(p, "/t/")
+		if !strings.Contains(rest, "/") || strings.HasSuffix(rest, "/pdf") {
+			public = true
+		}
+	}
+	if public || s.currentUser(c) != nil {
+		c.Next()
+		return
+	}
+	if c.Request.Method == http.MethodGet {
+		c.Redirect(http.StatusSeeOther, "/login?next="+url.QueryEscape(c.Request.URL.RequestURI()))
+	} else {
+		c.Redirect(http.StatusSeeOther, "/login")
+	}
+	c.Abort()
+}
+
+// loginPage nampilin halaman login (tombol "Login dengan Google").
+func (s *server) loginPage(c *gin.Context) {
+	next := safeNext(c.Query("next"))
+	if s.currentUser(c) != nil {
+		c.Redirect(http.StatusSeeOther, next)
+		return
+	}
+	c.HTML(http.StatusOK, "login.html", gin.H{
+		"AuthReady": s.auth != nil,
+		"Next":      next,
+		"Error":     c.Query("err"),
+	})
+}
+
 func (s *server) login(c *gin.Context) {
 	if s.auth == nil {
 		c.HTML(http.StatusServiceUnavailable, "error.html", gin.H{"Message": "Login belum dikonfigurasi di server"})
 		return
 	}
 	state := randomID(32)
-	next := c.Query("next")
-	if !strings.HasPrefix(next, "/") || strings.HasPrefix(next, "//") {
-		next = "/"
-	}
+	next := safeNext(c.Query("next"))
 	c.SetSameSite(http.SameSiteLaxMode)
 	c.SetCookie(stateCookie, state+"|"+next, 600, "/", "", secureCookie(c), true)
 
@@ -182,10 +224,7 @@ func (s *server) callback(c *gin.Context) {
 	payload, _ := json.Marshal(u)
 	c.SetSameSite(http.SameSiteLaxMode)
 	c.SetCookie(sessionCookie, s.auth.sign(payload), int(sessionTTL.Seconds()), "/", "", secureCookie(c), true)
-	if !strings.HasPrefix(next, "/") || strings.HasPrefix(next, "//") {
-		next = "/"
-	}
-	c.Redirect(http.StatusSeeOther, next)
+	c.Redirect(http.StatusSeeOther, safeNext(next))
 }
 
 func (s *server) logout(c *gin.Context) {

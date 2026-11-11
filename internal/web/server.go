@@ -48,6 +48,8 @@ func New(st store.Store) *gin.Engine {
 	r.GET("/login", s.loginPage)
 	r.GET("/login/google", s.login)
 	r.GET("/auth/callback", s.callback)
+	r.GET("/username", s.usernamePage)
+	r.POST("/username", s.usernamePage)
 	r.POST("/logout", s.logout)
 	r.GET("/", s.home)
 	r.POST("/new", s.create)
@@ -233,7 +235,7 @@ func (s *server) create(c *gin.Context) {
 	}
 	t.ID = randomID(8)
 	t.OwnerID = u.ID
-	t.OwnerName = u.Name
+	t.OwnerName = u.Username
 	if !s.save(c, t) {
 		return
 	}

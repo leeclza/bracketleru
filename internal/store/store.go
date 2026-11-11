@@ -21,7 +21,10 @@ import (
 	_ "github.com/jackc/pgx/v5/stdlib" // daftarin driver "pgx"
 )
 
-var ErrNotFound = errors.New("turnamen tidak ditemukan")
+var (
+	ErrNotFound      = errors.New("turnamen tidak ditemukan")
+	ErrUsernameTaken = errors.New("username sudah dipakai orang lain")
+)
 
 // Store itu interface: handler web cuma tau method ini, gak peduli
 // datanya disimpan di file atau database.
@@ -31,6 +34,11 @@ type Store interface {
 	Delete(ctx context.Context, id string) error
 	// ListByOwner balikin turnamen milik user (terbaru dulu, maks limit).
 	ListByOwner(ctx context.Context, ownerID string, limit int) ([]*bracket.Tournament, error)
+
+	// Username user (ID akun Google). "" kalau belum pernah diisi.
+	GetUsername(ctx context.Context, userID string) (string, error)
+	// SetUsername nyimpen username; ErrUsernameTaken kalau sudah dipakai user lain.
+	SetUsername(ctx context.Context, userID, email, username string) error
 }
 
 func sortNewest(ts []*bracket.Tournament, limit int) []*bracket.Tournament {
@@ -119,6 +127,54 @@ func (s *FileStore) ListByOwner(_ context.Context, ownerID string, limit int) ([
 	return sortNewest(out, limit), nil
 }
 
+// user disimpan di satu file users.json: map[userID]fileUser
+type fileUser struct {
+	Email    string `json:"email"`
+	Username string `json:"username"`
+}
+
+func (s *FileStore) readUsers() (map[string]fileUser, error) {
+	users := map[string]fileUser{}
+	data, err := os.ReadFile(filepath.Join(s.dir, "users.json"))
+	if errors.Is(err, os.ErrNotExist) {
+		return users, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	return users, json.Unmarshal(data, &users)
+}
+
+func (s *FileStore) GetUsername(_ context.Context, userID string) (string, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	users, err := s.readUsers()
+	if err != nil {
+		return "", err
+	}
+	return users[userID].Username, nil
+}
+
+func (s *FileStore) SetUsername(_ context.Context, userID, email, username string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	users, err := s.readUsers()
+	if err != nil {
+		return err
+	}
+	for id, u := range users {
+		if id != userID && u.Username == username {
+			return ErrUsernameTaken
+		}
+	}
+	users[userID] = fileUser{Email: email, Username: username}
+	data, err := json.Marshal(users)
+	if err != nil {
+		return err
+	}
+	return os.WriteFile(filepath.Join(s.dir, "users.json"), data, 0o644)
+}
+
 // ---------- SQLStore (Postgres, mis. Neon) ----------
 
 type SQLStore struct {
@@ -149,7 +205,37 @@ func NewSQLStore(dsn string) (*SQLStore, error) {
 	if _, err = db.Exec(`CREATE INDEX IF NOT EXISTS idx_tournaments_owner ON tournaments(owner_id)`); err != nil {
 		return nil, err
 	}
+	_, err = db.Exec(`CREATE TABLE IF NOT EXISTS users (
+		id         TEXT PRIMARY KEY,
+		email      TEXT NOT NULL,
+		username   TEXT NOT NULL UNIQUE,
+		created_at BIGINT NOT NULL
+	)`)
+	if err != nil {
+		return nil, err
+	}
 	return &SQLStore{db: db}, nil
+}
+
+func (s *SQLStore) GetUsername(ctx context.Context, userID string) (string, error) {
+	var name string
+	err := s.db.QueryRowContext(ctx, `SELECT username FROM users WHERE id = $1`, userID).Scan(&name)
+	if errors.Is(err, sql.ErrNoRows) {
+		return "", nil
+	}
+	return name, err
+}
+
+func (s *SQLStore) SetUsername(ctx context.Context, userID, email, username string) error {
+	_, err := s.db.ExecContext(ctx,
+		`INSERT INTO users (id, email, username, created_at) VALUES ($1, $2, $3, $4)
+		 ON CONFLICT (id) DO UPDATE SET email = EXCLUDED.email, username = EXCLUDED.username`,
+		userID, email, username, time.Now().Unix())
+	// 23505 = unique_violation (username sudah dipakai)
+	if err != nil && (strings.Contains(err.Error(), "23505") || strings.Contains(err.Error(), "duplicate key")) {
+		return ErrUsernameTaken
+	}
+	return err
 }
 
 func (s *SQLStore) Get(ctx context.Context, id string) (*bracket.Tournament, error) {

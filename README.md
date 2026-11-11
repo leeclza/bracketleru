@@ -14,7 +14,7 @@ Cocok untuk turnamen game (Tekken, eFootball, Mobile Legends, dan lain-lain), ol
   - Group Stage, lalu playoff gugur
 - **Preview langsung** saat mengisi peserta, sebelum turnamen dibuat
 - **Klasemen otomatis** untuk round robin, swiss, dan grup
-- **Login Google khusus email ITERA**: hanya pembuat turnamen yang bisa mengisi skor dan mengedit
+- **Login Google khusus email `@student.itera.ac.id`**, lalu wajib isi username. Hanya pembuat turnamen yang bisa mengisi skor dan mengedit
 - **Link tonton publik**: penonton bisa buka `/t/:id` tanpa login, dan halamannya refresh otomatis
 - **Export PDF** bracket dan klasemen
 - Tampilan hitam putih yang nyaman di desktop dan HP
@@ -75,7 +75,7 @@ Tanpa `DATABASE_URL`, data disimpan sebagai file JSON di folder `data/`. Kalau m
 | `DATABASE_URL` | di production | Connection string Postgres, contoh `postgresql://user:pass@ep-xxx.neon.tech/neondb?sslmode=require` |
 | `PORT` | tidak | Port lokal, default `8080` |
 | `DATA_DIR` | tidak | Folder data lokal, default `data` |
-| `ALLOWED_EMAIL_DOMAINS` | tidak | Domain email yang boleh login, default `itera.ac.id` (subdomain ikut diizinkan) |
+| `ALLOWED_EMAIL_DOMAINS` | tidak | Domain email yang boleh login, default `student.itera.ac.id` (harus persis sama) |
 
 ## Deploy ke Vercel
 
@@ -96,7 +96,9 @@ Di free tier Neon, compute akan tidur kalau tidak dipakai beberapa menit dan nya
 
 ## Siapa yang bisa login
 
-Secara default hanya akun Google dengan email **ITERA** yang bisa login, yaitu `@itera.ac.id` dan subdomainnya seperti `@student.itera.ac.id`. Akun lain ditolak di halaman login. Daftar domain bisa diubah lewat env `ALLOWED_EMAIL_DOMAINS` (dipisah koma).
+Hanya akun Google dengan email **`@student.itera.ac.id`** yang bisa login. Email lain, termasuk `@itera.ac.id` (staf) dan Gmail, ditolak di halaman login. Daftar domain bisa diubah lewat env `ALLOWED_EMAIL_DOMAINS` (dipisah koma, harus persis sama).
+
+Setelah login pertama, user **wajib mengisi username** (3–20 karakter: huruf kecil, angka, titik, underscore; unik). Username disimpan di tabel `users` dan tampil di pojok kanan atas.
 
 Penonton tetap bisa membuka link tonton `/t/:id` tanpa login.
 

@@ -7,6 +7,7 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"strings"
 	"sync"
 
 	"bracketleru/internal/store"
@@ -25,9 +26,26 @@ func Handler() http.Handler {
 		if err != nil {
 			log.Fatalf("gagal menyiapkan penyimpanan: %v", err)
 		}
-		handler = web.New(st)
+		handler = restorePath(web.New(st))
 	})
 	return handler
+}
+
+// restorePath: rewrite di vercel.json ngirim semua request ke /api/index?__path=/asli.
+// Di sini path aslinya dibalikin sebelum masuk router, jadi jalan baik lewat
+// api/index.go maupun waktu Vercel jalanin main.go sebagai backend framework.
+func restorePath(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		q := r.URL.Query()
+		if p := q.Get("__path"); p != "" && strings.HasPrefix(p, "/") {
+			q.Del("__path")
+			r.URL.Path = p
+			r.URL.RawPath = ""
+			r.URL.RawQuery = q.Encode()
+			r.RequestURI = r.URL.RequestURI()
+		}
+		next.ServeHTTP(w, r)
+	})
 }
 
 // Kalau DATABASE_URL di-set -> pakai Postgres (Neon).

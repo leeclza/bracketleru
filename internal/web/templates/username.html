@@ -1,0 +1,16 @@
+{{template "head" (dict "Title" "Pilih username")}}
+<section class="login-box">
+  <h1>Satu langkah lagi</h1>
+  <p class="hint">Login sebagai <b>{{.User.Email}}</b>.<br>Isi username kamu dulu sebelum lanjut.</p>
+  {{if .Error}}<div class="alert">{{.Error}}</div>{{end}}
+  <form method="post" action="/username">
+    <input type="hidden" name="next" value="{{.Next}}">
+    <label class="field"><span>Username</span>
+      <input name="username" value="{{.Value}}" placeholder="mis. leon_123" minlength="3" maxlength="20"
+             pattern="[a-zA-Z0-9_.]{3,20}" autocomplete="username" autofocus required></label>
+    <p class="hint">3-20 karakter: huruf, angka, titik, underscore. Disimpan sebagai huruf kecil.</p>
+    <button class="btn primary big" type="submit">Simpan & lanjut</button>
+  </form>
+  <form method="post" action="/logout" class="sep"><button class="btn ghost-btn">Bukan kamu? Logout</button></form>
+</section>
+{{template "foot"}}

@@ -1,6 +1,6 @@
 // Package store nyimpen turnamen. Ada dua implementasi:
 //   - FileStore: file JSON di folder lokal (buat development)
-//   - SQLStore: database Turso/libSQL (buat production di Vercel)
+//   - SQLStore: database Postgres, mis. Neon (buat production di Vercel)
 package store
 
 import (
@@ -18,10 +18,13 @@ import (
 
 	"bracketleru/internal/bracket"
 
-	_ "github.com/tursodatabase/libsql-client-go/libsql" // daftarin driver "libsql"
+	_ "github.com/jackc/pgx/v5/stdlib" // daftarin driver "pgx"
 )
 
-var ErrNotFound = errors.New("turnamen tidak ditemukan")
+var (
+	ErrNotFound      = errors.New("turnamen tidak ditemukan")
+	ErrUsernameTaken = errors.New("username sudah dipakai orang lain")
+)
 
 // Store itu interface: handler web cuma tau method ini, gak peduli
 // datanya disimpan di file atau database.
@@ -31,6 +34,11 @@ type Store interface {
 	Delete(ctx context.Context, id string) error
 	// ListByOwner balikin turnamen milik user (terbaru dulu, maks limit).
 	ListByOwner(ctx context.Context, ownerID string, limit int) ([]*bracket.Tournament, error)
+
+	// Username user (ID akun Google). "" kalau belum pernah diisi.
+	GetUsername(ctx context.Context, userID string) (string, error)
+	// SetUsername nyimpen username; ErrUsernameTaken kalau sudah dipakai user lain.
+	SetUsername(ctx context.Context, userID, email, username string) error
 }
 
 func sortNewest(ts []*bracket.Tournament, limit int) []*bracket.Tournament {
@@ -119,30 +127,115 @@ func (s *FileStore) ListByOwner(_ context.Context, ownerID string, limit int) ([
 	return sortNewest(out, limit), nil
 }
 
-// ---------- SQLStore (Turso) ----------
+// user disimpan di satu file users.json: map[userID]fileUser
+type fileUser struct {
+	Email    string `json:"email"`
+	Username string `json:"username"`
+}
+
+func (s *FileStore) readUsers() (map[string]fileUser, error) {
+	users := map[string]fileUser{}
+	data, err := os.ReadFile(filepath.Join(s.dir, "users.json"))
+	if errors.Is(err, os.ErrNotExist) {
+		return users, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	return users, json.Unmarshal(data, &users)
+}
+
+func (s *FileStore) GetUsername(_ context.Context, userID string) (string, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	users, err := s.readUsers()
+	if err != nil {
+		return "", err
+	}
+	return users[userID].Username, nil
+}
+
+func (s *FileStore) SetUsername(_ context.Context, userID, email, username string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	users, err := s.readUsers()
+	if err != nil {
+		return err
+	}
+	for id, u := range users {
+		if id != userID && u.Username == username {
+			return ErrUsernameTaken
+		}
+	}
+	users[userID] = fileUser{Email: email, Username: username}
+	data, err := json.Marshal(users)
+	if err != nil {
+		return err
+	}
+	return os.WriteFile(filepath.Join(s.dir, "users.json"), data, 0o644)
+}
+
+// ---------- SQLStore (Postgres, mis. Neon) ----------
 
 type SQLStore struct {
 	db *sql.DB
 }
 
-// NewSQLStore nyambung ke Turso. url contohnya "libsql://nama-db.turso.io".
-func NewSQLStore(url, token string) (*SQLStore, error) {
-	db, err := sql.Open("libsql", url+"?authToken="+token)
+// NewSQLStore nyambung ke Postgres.
+// dsn contohnya "postgresql://user:pass@ep-xxx.neon.tech/neondb?sslmode=require".
+func NewSQLStore(dsn string) (*SQLStore, error) {
+	db, err := sql.Open("pgx", dsn)
 	if err != nil {
 		return nil, err
 	}
+	// di serverless tiap instance cukup sedikit koneksi
+	db.SetMaxOpenConns(4)
+	db.SetMaxIdleConns(2)
+	db.SetConnMaxIdleTime(time.Minute)
+
 	_, err = db.Exec(`CREATE TABLE IF NOT EXISTS tournaments (
 		id         TEXT PRIMARY KEY,
+		owner_id   TEXT NOT NULL DEFAULT '',
 		data       TEXT NOT NULL,
-		updated_at INTEGER NOT NULL
+		updated_at BIGINT NOT NULL
 	)`)
 	if err != nil {
 		return nil, err
 	}
-	// kolom owner_id buat nyari turnamen per user (error diabaikan kalau kolom sudah ada)
-	db.Exec(`ALTER TABLE tournaments ADD COLUMN owner_id TEXT NOT NULL DEFAULT ''`)
-	db.Exec(`CREATE INDEX IF NOT EXISTS idx_tournaments_owner ON tournaments(owner_id)`)
+	if _, err = db.Exec(`CREATE INDEX IF NOT EXISTS idx_tournaments_owner ON tournaments(owner_id)`); err != nil {
+		return nil, err
+	}
+	_, err = db.Exec(`CREATE TABLE IF NOT EXISTS users (
+		id         TEXT PRIMARY KEY,
+		email      TEXT NOT NULL,
+		username   TEXT NOT NULL UNIQUE,
+		created_at BIGINT NOT NULL
+	)`)
+	if err != nil {
+		return nil, err
+	}
 	return &SQLStore{db: db}, nil
+}
+
+func (s *SQLStore) GetUsername(ctx context.Context, userID string) (string, error) {
+	var name string
+	err := s.db.QueryRowContext(ctx, `SELECT username FROM users WHERE id = $1`, userID).Scan(&name)
+	if errors.Is(err, sql.ErrNoRows) {
+		return "", nil
+	}
+	return name, err
+}
+
+func (s *SQLStore) SetUsername(ctx context.Context, userID, email, username string) error {
+	_, err := s.db.ExecContext(ctx,
+		`INSERT INTO users (id, email, username, created_at) VALUES ($1, $2, $3, $4)
+		 ON CONFLICT (id) DO UPDATE SET email = EXCLUDED.email, username = EXCLUDED.username`,
+		userID, email, username, time.Now().Unix())
+	// 23505 = unique_violation (username sudah dipakai)
+	if err != nil && (strings.Contains(err.Error(), "23505") || strings.Contains(err.Error(), "duplicate key")) {
+		return ErrUsernameTaken
+	}
+	return err
 }
 
 func (s *SQLStore) Get(ctx context.Context, id string) (*bracket.Tournament, error) {
@@ -150,7 +243,7 @@ func (s *SQLStore) Get(ctx context.Context, id string) (*bracket.Tournament, err
 		return nil, ErrNotFound
 	}
 	var data string
-	err := s.db.QueryRowContext(ctx, `SELECT data FROM tournaments WHERE id = ?`, id).Scan(&data)
+	err := s.db.QueryRowContext(ctx, `SELECT data FROM tournaments WHERE id = $1`, id).Scan(&data)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, ErrNotFound
 	}
@@ -167,15 +260,15 @@ func (s *SQLStore) Save(ctx context.Context, t *bracket.Tournament) error {
 		return err
 	}
 	_, err = s.db.ExecContext(ctx,
-		`INSERT INTO tournaments (id, data, updated_at, owner_id) VALUES (?, ?, ?, ?)
-		 ON CONFLICT(id) DO UPDATE SET data = excluded.data, updated_at = excluded.updated_at, owner_id = excluded.owner_id`,
-		t.ID, string(data), time.Now().Unix(), t.OwnerID)
+		`INSERT INTO tournaments (id, owner_id, data, updated_at) VALUES ($1, $2, $3, $4)
+		 ON CONFLICT (id) DO UPDATE SET owner_id = EXCLUDED.owner_id, data = EXCLUDED.data, updated_at = EXCLUDED.updated_at`,
+		t.ID, t.OwnerID, string(data), time.Now().Unix())
 	return err
 }
 
 func (s *SQLStore) ListByOwner(ctx context.Context, ownerID string, limit int) ([]*bracket.Tournament, error) {
 	rows, err := s.db.QueryContext(ctx,
-		`SELECT data FROM tournaments WHERE owner_id = ? ORDER BY updated_at DESC LIMIT ?`, ownerID, limit)
+		`SELECT data FROM tournaments WHERE owner_id = $1 ORDER BY updated_at DESC LIMIT $2`, ownerID, limit)
 	if err != nil {
 		return nil, err
 	}
@@ -195,6 +288,6 @@ func (s *SQLStore) ListByOwner(ctx context.Context, ownerID string, limit int) (
 }
 
 func (s *SQLStore) Delete(ctx context.Context, id string) error {
-	_, err := s.db.ExecContext(ctx, `DELETE FROM tournaments WHERE id = ?`, id)
+	_, err := s.db.ExecContext(ctx, `DELETE FROM tournaments WHERE id = $1`, id)
 	return err
 }

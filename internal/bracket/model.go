@@ -255,7 +255,7 @@ func clamp(v, lo, hi int) int { return max(lo, min(v, hi)) }
 // Feeder nunjukin match sumber yang pemenangnya masuk ke sisi A atau B
 // match ini. Dipakai buat gambar garis penghubung di bracket.
 type Feeder struct {
-	From *Match
+	From  *Match
 	SideB bool
 }
 

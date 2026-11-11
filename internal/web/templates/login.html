@@ -1,7 +1,7 @@
 {{template "head" (dict "Title" "Login")}}
 <section class="login-box">
   <h1>Bracket<span>Leru</span></h1>
-  <p class="hint">Login dulu untuk membuat dan mengelola turnamen.</p>
+  <p class="hint">Login dulu untuk membuat dan mengelola turnamen.<br>Khusus email <b>@student.itera.ac.id</b>.</p>
   {{if .Error}}<div class="alert">{{.Error}}</div>{{end}}
   {{if .AuthReady}}
   <a class="btn primary big google-btn" href="/login/google?next={{.Next}}">

@@ -25,8 +25,11 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"regexp"
 	"strings"
 	"time"
+
+	"bracketleru/internal/store"
 
 	"github.com/gin-gonic/gin"
 )
@@ -38,15 +41,36 @@ const (
 )
 
 type User struct {
-	ID    string `json:"sub"`
-	Email string `json:"email"`
-	Name  string `json:"name"`
-	Exp   int64  `json:"exp"`
+	ID       string `json:"sub"`
+	Email    string `json:"email"`
+	Name     string `json:"name"`
+	Username string `json:"u,omitempty"` // kosong = belum isi username
+	Exp      int64  `json:"exp"`
 }
 
 type authConfig struct {
 	clientID, clientSecret, baseURL string
 	secret                          []byte
+	domains                         []string // domain email yang boleh login
+}
+
+// Default cuma email mahasiswa ITERA. Bisa diganti lewat env
+// ALLOWED_EMAIL_DOMAINS (dipisah koma).
+const defaultAllowedDomains = "student.itera.ac.id"
+
+// emailAllowed: domain email harus PERSIS salah satu domain yang diizinkan
+// (subdomain lain / itera.ac.id biasa ditolak).
+func (a *authConfig) emailAllowed(email string) bool {
+	_, domain, ok := strings.Cut(strings.ToLower(strings.TrimSpace(email)), "@")
+	if !ok || domain == "" {
+		return false
+	}
+	for _, d := range a.domains {
+		if domain == d {
+			return true
+		}
+	}
+	return false
 }
 
 func loadAuthConfig() *authConfig {
@@ -55,6 +79,15 @@ func loadAuthConfig() *authConfig {
 		clientSecret: os.Getenv("GOOGLE_CLIENT_SECRET"),
 		baseURL:      strings.TrimRight(os.Getenv("BASE_URL"), "/"),
 		secret:       []byte(os.Getenv("SESSION_SECRET")),
+	}
+	raw := os.Getenv("ALLOWED_EMAIL_DOMAINS")
+	if raw == "" {
+		raw = defaultAllowedDomains
+	}
+	for _, d := range strings.Split(raw, ",") {
+		if d = strings.ToLower(strings.TrimPrefix(strings.TrimSpace(d), "@")); d != "" {
+			cfg.domains = append(cfg.domains, d)
+		}
 	}
 	if cfg.clientID == "" || cfg.clientSecret == "" || len(cfg.secret) < 32 {
 		log.Println("PERINGATAN: GOOGLE_CLIENT_ID / GOOGLE_CLIENT_SECRET / SESSION_SECRET (min 32 karakter) belum di-set, login tidak akan jalan")
@@ -120,7 +153,7 @@ func (s *server) currentUser(c *gin.Context) *User {
 		return nil
 	}
 	var u User
-	if json.Unmarshal(payload, &u) != nil || u.ID == "" || time.Now().Unix() > u.Exp {
+	if json.Unmarshal(payload, &u) != nil || u.ID == "" || time.Now().Unix() > u.Exp || !s.auth.emailAllowed(u.Email) {
 		return nil
 	}
 	return &u
@@ -147,7 +180,14 @@ func (s *server) requireLogin(c *gin.Context) {
 			public = true
 		}
 	}
-	if public || s.currentUser(c) != nil {
+	u := s.currentUser(c)
+	if u != nil && u.Username == "" && !public && p != "/username" && p != "/logout" {
+		// sudah login tapi belum isi username -> wajib isi dulu
+		c.Redirect(http.StatusSeeOther, "/username?next="+url.QueryEscape(c.Request.URL.RequestURI()))
+		c.Abort()
+		return
+	}
+	if public || u != nil {
 		c.Next()
 		return
 	}
@@ -188,6 +228,7 @@ func (s *server) login(c *gin.Context) {
 		"redirect_uri":  {baseURL(c, s.auth) + "/auth/callback"},
 		"response_type": {"code"},
 		"scope":         {"openid email profile"},
+		"hd":            {s.auth.domains[0]}, // hint ke Google: tampilkan akun domain ini
 		"state":         {state},
 		"prompt":        {"select_account"},
 	}
@@ -220,11 +261,69 @@ func (s *server) callback(c *gin.Context) {
 		fail("tidak bisa verifikasi akun Google")
 		return
 	}
+	if !s.auth.emailAllowed(u.Email) {
+		log.Println("login ditolak, domain tidak diizinkan:", u.Email)
+		c.Redirect(http.StatusSeeOther, "/login?err="+url.QueryEscape("Hanya email @student.itera.ac.id yang bisa login. Akun "+u.Email+" ditolak."))
+		return
+	}
+	name, err := s.store.GetUsername(c.Request.Context(), u.ID)
+	if err != nil {
+		log.Println("ambil username:", err)
+		fail("gagal memuat akun, coba lagi")
+		return
+	}
+	u.Username = name
+	s.setSession(c, u)
+	c.Redirect(http.StatusSeeOther, safeNext(next)) // requireLogin yang ngarahin ke /username kalau kosong
+}
+
+func (s *server) setSession(c *gin.Context, u *User) {
 	u.Exp = time.Now().Add(sessionTTL).Unix()
 	payload, _ := json.Marshal(u)
 	c.SetSameSite(http.SameSiteLaxMode)
 	c.SetCookie(sessionCookie, s.auth.sign(payload), int(sessionTTL.Seconds()), "/", "", secureCookie(c), true)
-	c.Redirect(http.StatusSeeOther, safeNext(next))
+}
+
+var validUsername = regexp.MustCompile(`^[a-z0-9_.]{3,20}$`)
+
+// usernamePage: form wajib isi username setelah login pertama.
+func (s *server) usernamePage(c *gin.Context) {
+	u := s.currentUser(c)
+	if u == nil {
+		c.Redirect(http.StatusSeeOther, "/login")
+		return
+	}
+	next := safeNext(c.Query("next"))
+	if c.Request.Method == http.MethodGet {
+		if u.Username != "" {
+			c.Redirect(http.StatusSeeOther, next)
+			return
+		}
+		c.HTML(http.StatusOK, "username.html", gin.H{"User": u, "Next": next})
+		return
+	}
+	next = safeNext(c.PostForm("next"))
+	name := strings.ToLower(strings.TrimSpace(c.PostForm("username")))
+	show := func(msg string) {
+		c.HTML(http.StatusOK, "username.html", gin.H{"User": u, "Next": next, "Value": name, "Error": msg})
+	}
+	if !validUsername.MatchString(name) {
+		show("Username 3-20 karakter, hanya huruf kecil, angka, titik, dan underscore.")
+		return
+	}
+	err := s.store.SetUsername(c.Request.Context(), u.ID, u.Email, name)
+	if errors.Is(err, store.ErrUsernameTaken) {
+		show("Username @" + name + " sudah dipakai, coba yang lain.")
+		return
+	}
+	if err != nil {
+		log.Println("simpan username:", err)
+		show("Gagal menyimpan, coba lagi.")
+		return
+	}
+	u.Username = name
+	s.setSession(c, u)
+	c.Redirect(http.StatusSeeOther, next)
 }
 
 func (s *server) logout(c *gin.Context) {
@@ -282,10 +381,12 @@ func (a *authConfig) exchange(ctx context.Context, code, redirect string) (*User
 	if err := json.NewDecoder(res.Body).Decode(&info); err != nil || info.Sub == "" {
 		return nil, errors.New("profil tidak valid")
 	}
+	if !info.EmailVerified {
+		return nil, errors.New("email Google belum terverifikasi")
+	}
 	name := info.Name
 	if name == "" {
 		name = info.Email
 	}
 	return &User{ID: info.Sub, Email: info.Email, Name: name}, nil
 }
-

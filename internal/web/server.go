@@ -161,8 +161,8 @@ func (s *server) home(c *gin.Context) {
 		"User":      u,
 		"AuthReady": s.auth != nil,
 		"Mine":      items,
-		"Formats": formatOptions,
-		"Error":   c.Query("err"),
+		"Formats":   formatOptions,
+		"Error":     c.Query("err"),
 	})
 }
 

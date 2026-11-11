@@ -30,12 +30,12 @@ func Handler() http.Handler {
 	return handler
 }
 
-// Kalau TURSO_DATABASE_URL di-set -> pakai Turso.
+// Kalau DATABASE_URL di-set -> pakai Postgres (Neon).
 // Kalau enggak -> simpan file JSON di folder ./data (cocok buat lokal).
 func newStore() (store.Store, error) {
-	if url := os.Getenv("TURSO_DATABASE_URL"); url != "" {
-		log.Println("penyimpanan: Turso")
-		return store.NewSQLStore(url, os.Getenv("TURSO_AUTH_TOKEN"))
+	if dsn := os.Getenv("DATABASE_URL"); dsn != "" {
+		log.Println("penyimpanan: Postgres")
+		return store.NewSQLStore(dsn)
 	}
 	dir := os.Getenv("DATA_DIR")
 	if dir == "" {
@@ -43,7 +43,7 @@ func newStore() (store.Store, error) {
 		if os.Getenv("VERCEL") != "" {
 			// di Vercel cuma /tmp yang bisa ditulis, dan isinya bisa hilang kapan aja
 			dir = "/tmp/bracketleru"
-			log.Println("PERINGATAN: TURSO_DATABASE_URL belum di-set, data tidak akan awet")
+			log.Println("PERINGATAN: DATABASE_URL belum di-set, data tidak akan awet")
 		}
 	}
 	log.Println("penyimpanan: folder", dir)

@@ -47,6 +47,26 @@ type User struct {
 type authConfig struct {
 	clientID, clientSecret, baseURL string
 	secret                          []byte
+	domains                         []string // domain email yang boleh login
+}
+
+// Default cuma akun ITERA. Bisa diganti lewat env ALLOWED_EMAIL_DOMAINS
+// (dipisah koma), mis. "itera.ac.id,gmail.com".
+const defaultAllowedDomains = "itera.ac.id"
+
+// emailAllowed: domain persis sama atau subdomainnya
+// (mis. student.itera.ac.id lolos untuk itera.ac.id).
+func (a *authConfig) emailAllowed(email string) bool {
+	_, domain, ok := strings.Cut(strings.ToLower(strings.TrimSpace(email)), "@")
+	if !ok || domain == "" {
+		return false
+	}
+	for _, d := range a.domains {
+		if domain == d || strings.HasSuffix(domain, "."+d) {
+			return true
+		}
+	}
+	return false
 }
 
 func loadAuthConfig() *authConfig {
@@ -55,6 +75,15 @@ func loadAuthConfig() *authConfig {
 		clientSecret: os.Getenv("GOOGLE_CLIENT_SECRET"),
 		baseURL:      strings.TrimRight(os.Getenv("BASE_URL"), "/"),
 		secret:       []byte(os.Getenv("SESSION_SECRET")),
+	}
+	raw := os.Getenv("ALLOWED_EMAIL_DOMAINS")
+	if raw == "" {
+		raw = defaultAllowedDomains
+	}
+	for _, d := range strings.Split(raw, ",") {
+		if d = strings.ToLower(strings.TrimPrefix(strings.TrimSpace(d), "@")); d != "" {
+			cfg.domains = append(cfg.domains, d)
+		}
 	}
 	if cfg.clientID == "" || cfg.clientSecret == "" || len(cfg.secret) < 32 {
 		log.Println("PERINGATAN: GOOGLE_CLIENT_ID / GOOGLE_CLIENT_SECRET / SESSION_SECRET (min 32 karakter) belum di-set, login tidak akan jalan")
@@ -120,7 +149,7 @@ func (s *server) currentUser(c *gin.Context) *User {
 		return nil
 	}
 	var u User
-	if json.Unmarshal(payload, &u) != nil || u.ID == "" || time.Now().Unix() > u.Exp {
+	if json.Unmarshal(payload, &u) != nil || u.ID == "" || time.Now().Unix() > u.Exp || !s.auth.emailAllowed(u.Email) {
 		return nil
 	}
 	return &u
@@ -220,6 +249,11 @@ func (s *server) callback(c *gin.Context) {
 		fail("tidak bisa verifikasi akun Google")
 		return
 	}
+	if !s.auth.emailAllowed(u.Email) {
+		log.Println("login ditolak, domain tidak diizinkan:", u.Email)
+		c.Redirect(http.StatusSeeOther, "/login?err="+url.QueryEscape("Hanya email ITERA (@itera.ac.id / @student.itera.ac.id) yang bisa login. Akun "+u.Email+" ditolak."))
+		return
+	}
 	u.Exp = time.Now().Add(sessionTTL).Unix()
 	payload, _ := json.Marshal(u)
 	c.SetSameSite(http.SameSiteLaxMode)
@@ -282,10 +316,12 @@ func (a *authConfig) exchange(ctx context.Context, code, redirect string) (*User
 	if err := json.NewDecoder(res.Body).Decode(&info); err != nil || info.Sub == "" {
 		return nil, errors.New("profil tidak valid")
 	}
+	if !info.EmailVerified {
+		return nil, errors.New("email Google belum terverifikasi")
+	}
 	name := info.Name
 	if name == "" {
 		name = info.Email
 	}
 	return &User{ID: info.Sub, Email: info.Email, Name: name}, nil
 }
-

@@ -1,0 +1,72 @@
+{{template "head" (dict "Title" "Bikin bracket" "App" true "User" .User "AuthReady" .AuthReady)}}
+
+<aside class="sidebar">
+  <form method="post" action="/new" id="create-form" class="create">
+    <h1 class="side-title">Turnamen baru</h1>
+    {{if .Error}}<div class="alert">⚠️ {{.Error}}</div>{{end}}
+
+    <label class="field"><span>Nama turnamen</span>
+      <input name="name" placeholder="Leru Cup #1" maxlength="80"></label>
+    <label class="field"><span>Game</span>
+      <input name="game" list="games" placeholder="Tekken 8" maxlength="60">
+      <datalist id="games">
+        <option value="Tekken 8"><option value="eFootball / PES"><option value="EA FC"><option value="Street Fighter 6">
+        <option value="Mobile Legends"><option value="Valorant"><option value="Catur">
+      </datalist>
+    </label>
+
+    <fieldset class="field">
+      <legend>Format</legend>
+      <div class="formats">
+        {{range $i, $f := .Formats}}
+        <label class="format" title="{{$f.Desc}}">
+          <input type="radio" name="format" value="{{$f.Value}}" id="f-{{$f.Value}}" {{if eq $i 0}}checked{{end}}>
+          <span class="format-card"><b>{{$f.Name}}</b><small>{{$f.Desc}}</small></span>
+        </label>
+        {{end}}
+      </div>
+    </fieldset>
+
+    <div class="options">
+      <label class="check opt-single opt-groups"><input type="checkbox" name="thirdPlace"> Ada perebutan juara 3</label>
+      <label class="field opt-roundrobin opt-groups"><span>Ketemu tiap lawan</span>
+        <select name="legs"><option value="1">1 kali</option><option value="2">2 kali (home & away)</option></select></label>
+      <label class="field opt-swiss"><span>Jumlah ronde Swiss</span>
+        <input type="number" name="swissRounds" min="0" max="20" placeholder="otomatis"></label>
+      <label class="field opt-groups"><span>Jumlah grup</span>
+        <input type="number" name="groupCount" min="2" max="32" placeholder="otomatis"></label>
+      <label class="field opt-groups"><span>Lolos per grup</span>
+        <input type="number" name="advance" min="1" max="8" value="2"></label>
+    </div>
+
+    <label class="field"><span>Peserta <small>(satu nama per baris, urutan = seed)</small></span>
+      <textarea name="participants" rows="9" required placeholder="Andi&#10;Budi&#10;Citra&#10;Dewi"></textarea></label>
+    <label class="check"><input type="checkbox" name="shuffle" checked> Acak urutan peserta saat dibuat</label>
+
+    {{if .User}}
+    <button class="btn primary big" type="submit">Buat bracket</button>
+    {{else}}
+    <a class="btn primary big" href="/login">Login Google untuk membuat</a>
+    <p class="hint">Preview bisa dicoba tanpa login. Link tonton turnamen bisa dibuka siapa saja.</p>
+    {{end}}
+  </form>
+
+  {{if .Mine}}
+  <div class="side-section">
+    <h2>Turnamen kamu</h2>
+    <ul class="mine">
+      {{range .Mine}}
+      <li><a href="{{.URL}}">{{.Name}}</a>
+        {{if .Complete}}<span class="tag ok">Selesai</span>{{else}}<span class="tag live">Jalan</span>{{end}}</li>
+      {{end}}
+    </ul>
+  </div>
+  {{end}}
+</aside>
+
+<section class="stage">
+  <div class="stage-head"><span class="tag">Preview</span><span class="hint">Bracket muncul otomatis waktu kamu ngisi peserta</span></div>
+  <div id="preview" data-preview><div class="empty">Isi nama peserta di sidebar kiri, bracket-nya langsung keliatan di sini 👀</div></div>
+</section>
+
+{{template "foot"}}

@@ -1,0 +1,79 @@
+{{template "head" (dict "Title" .T.Name "Refresh" (not .Admin) "App" true "User" .User "AuthReady" .AuthReady)}}
+
+<aside class="sidebar">
+  <div>
+    <h1 class="side-title">{{.T.Name}}</h1>
+    <p class="meta">
+      {{if .T.Game}}<span class="tag">🎮 {{.T.Game}}</span>{{end}}
+      <span class="tag">{{.T.FormatName}}</span>
+      <span class="tag">{{len .T.Participants}} peserta</span>
+      {{if .View.Complete}}<span class="tag ok">Selesai</span>{{else}}<span class="tag live">{{.View.Progress}}</span>{{end}}
+    </p>
+  </div>
+
+  {{if .Error}}<div class="alert">⚠️ {{.Error}}</div>{{end}}
+
+  {{if .View.Podium}}
+  <div class="side-section podium{{if not .View.Complete}} temp{{end}}">
+    {{range .View.Podium}}<div class="place p{{.Place}}"><span class="medal">{{medal .Place}}</span><b>{{.Names}}</b></div>{{end}}
+  </div>
+  {{end}}
+
+  {{if .View.SwissInfo}}
+  <div class="side-section">
+    <p>♟️ {{.View.SwissInfo}}</p>
+    {{if and .Admin .View.CanSwissNext}}
+      <button class="btn primary big">Mulai ronde berikutnya →</button></form>
+    {{end}}
+  </div>
+  {{end}}
+
+  {{if .View.WaitPlayoff}}<p class="hint">Playoff bisa dimulai setelah semua pertandingan grup selesai. Baris hijau = lolos.</p>{{end}}
+  {{if and .Admin .View.CanPlayoff}}
+    <p>✅ Fase grup selesai!</p><button class="btn primary big">Mulai playoff →</button></form>
+  {{end}}
+
+  {{if .Admin}}
+  <p class="hint">Klik kartu pertandingan di bracket buat isi / ubah skor.</p>
+
+  <details class="side-section" open>
+    <summary>🔗 Link tonton</summary>
+    <label class="field"><span>Bagikan ke penonton (tanpa login)</span><input readonly value="{{.PublicURL}}" onfocus="this.select()"></label>
+  </details>
+
+  <details class="side-section">
+    <summary>✏️ Edit info & nama peserta</summary>
+    <form method="post" action="/t/{{.T.ID}}/edit">
+      <label class="field"><span>Nama turnamen</span><input name="name" value="{{.T.Name}}" maxlength="80" required></label>
+      <label class="field"><span>Game</span><input name="game" value="{{.T.Game}}" maxlength="60"></label>
+      <label class="field"><span>Peserta <small>(urutan = seed, jumlah tetap)</small></span>
+        <textarea name="participants" rows="8">{{range .T.Participants}}{{.}}
+{{end}}</textarea></label>
+      <button class="btn primary big">Simpan perubahan</button>
+    </form>
+  </details>
+
+  <details class="side-section">
+    <summary>⚙️ Reset / hapus</summary>
+    <form method="post" action="/t/{{.T.ID}}/reset">
+      <label class="check"><input type="checkbox" name="shuffle"> Acak ulang seed</label>
+      <label class="check"><input type="checkbox" required> Yakin hapus semua skor</label>
+      <button class="btn big">↺ Reset bracket</button>
+    </form>
+    <form method="post" action="/t/{{.T.ID}}/delete" class="sep">
+      <label class="check"><input type="checkbox" required> Yakin hapus permanen</label>
+      <button class="btn danger big">🗑 Hapus turnamen</button>
+    </form>
+  </details>
+  {{else}}
+  <p class="hint">Mode penonton · refresh otomatis tiap 20 detik</p>
+  {{end}}
+
+  <a class="btn big" href="/t/{{.T.ID}}/pdf">📄 Download PDF</a>
+</aside>
+
+<section class="stage">
+  {{template "blocks" .View}}
+</section>
+
+{{template "foot"}}

@@ -1,0 +1,128 @@
+{{define "head"}}<!doctype html>
+<html lang="id">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{{.Title}} · Bracket Leru</title>
+  {{if .Refresh}}<meta http-equiv="refresh" content="20">{{end}}
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/static/style.css">
+  <script src="/static/app.js" defer></script>
+</head>
+<body{{if .App}} class="app"{{end}}>
+  <nav class="topbar">
+    <a href="/" class="logo">Bracket<span>Leru</span></a>
+    <div class="nav-right">
+      <a href="/" class="btn small">+ Turnamen baru</a>
+      {{if .User}}
+      <span class="who" title="{{.User.Email}}">{{.User.Name}}</span>
+      <form method="post" action="/logout"><button class="btn small">Logout</button></form>
+      {{else if .AuthReady}}
+      <a href="/login" class="btn small primary">Login Google</a>
+      {{end}}
+    </div>
+  </nav>
+  <main class="{{if .App}}workspace{{else}}container{{end}}">
+{{end}}
+
+{{define "foot"}}
+  </main>
+</body>
+</html>
+{{end}}
+
+{{/* semua blok (klasemen, bracket, daftar match) di area kanan */}}
+{{define "blocks"}}
+{{range .Blocks}}
+<section class="block" id="{{.ID}}">
+  <h2>{{.Title}}</h2>
+  {{with .Table}}
+  <div class="table-wrap">
+    <table class="standings">
+      <thead><tr><th>#</th><th class="l">Nama</th><th>M</th><th>W</th><th>D</th><th>L</th><th>Skor</th><th>+/-</th>{{if .Buchholz}}<th title="Buchholz">Buch</th>{{end}}<th>Poin</th></tr></thead>
+      <tbody>
+        {{range .Rows}}
+        <tr{{if .Qualify}} class="qualify"{{end}}>
+          <td>{{.Rank}}</td><td class="l">{{.Name}}</td><td>{{.Played}}</td><td>{{.W}}</td><td>{{.D}}</td><td>{{.L}}</td>
+          <td>{{.SF}}-{{.SA}}</td><td>{{.Diff}}</td>{{if $.SwissInfo}}<td>{{.Buchholz}}</td>{{end}}<td class="pts">{{.Pts}}</td>
+        </tr>
+        {{end}}
+      </tbody>
+    </table>
+  </div>
+  {{end}}
+  {{with .Section}}
+  <div class="{{if .Bracket}}board-scroll{{else}}rounds-list{{end}}">
+    {{if .Bracket}}<div class="board"><div class="board-main"><div class="bracket">{{template "rounds" .}}</div></div><svg class="wires"></svg></div>
+    {{else}}{{template "rounds" .}}{{end}}
+  </div>
+  {{end}}
+  {{with .Board}}
+  <div class="board-scroll">
+    <div class="board">
+      <div class="board-main">
+        {{range .Main}}
+        <div class="bsec">
+          <div class="bsec-title">{{.Title}}</div>
+          <div class="bracket">{{template "rounds" .}}</div>
+        </div>
+        {{end}}
+      </div>
+      {{with .Final}}<div class="board-final"><div class="bracket">{{template "rounds" .}}</div></div>{{end}}
+      <svg class="wires"></svg>
+    </div>
+  </div>
+  {{end}}
+</section>
+{{end}}
+{{end}}
+
+{{define "rounds"}}
+{{range .Rounds}}
+{{if .Spacer}}<div class="round spacer" aria-hidden="true"></div>{{else}}
+<div class="round">
+  <h3>{{.Title}}</h3>
+  <div class="round-matches">
+    {{range .Matches}}{{template "match" .}}{{end}}
+  </div>
+</div>
+{{end}}
+{{end}}
+{{end}}
+
+{{/* satu kartu match. Admin bisa klik kartu buat buka form skor */}}
+{{define "match"}}
+{{if .Ghost}}<div class="match ghost" aria-hidden="true"></div>
+{{else}}
+<details class="match{{if .Done}} done{{end}}{{if and .Admin .Ready}} editable{{end}}" id="m{{.ID}}" data-id="{{.ID}}"{{if .Feeds}} data-feeds="{{.Feeds}}"{{end}}>
+  <summary>
+    <div class="sides">
+      <div class="side sa{{if .A.Win}} win{{end}}{{if .A.Lose}} lose{{end}}{{if .A.Placeholder}} tbd{{end}}">
+        <span class="pname">{{.A.Name}}</span><span class="score">{{.A.Score}}</span>
+      </div>
+      <div class="side sb{{if .B.Win}} win{{end}}{{if .B.Lose}} lose{{end}}{{if .B.Placeholder}} tbd{{end}}">
+        <span class="pname">{{.B.Name}}</span><span class="score">{{.B.Score}}</span>
+      </div>
+    </div>
+    <span class="num">{{.Num}}</span>
+  </summary>
+  {{if and .Admin .Ready}}
+  <div class="score-pop">
+    <form method="post" action="{{.Action}}" class="score-form">
+      <label><span>{{.A.Name}}</span><input type="number" name="a" min="0" value="{{if .Done}}{{.ScoreA}}{{end}}" required inputmode="numeric"></label>
+      <label><span>{{.B.Name}}</span><input type="number" name="b" min="0" value="{{if .Done}}{{.ScoreB}}{{end}}" required inputmode="numeric"></label>
+      <button class="btn primary" type="submit">Simpan skor</button>
+    </form>
+    {{if not .AllowDraw}}<p class="hint">Babak gugur: skor tidak boleh seri.</p>{{end}}
+    {{if .Done}}
+    <form method="post" action="{{.Action}}/clear">
+      <button class="btn ghost-btn danger" type="submit">Hapus skor</button>
+    </form>
+    {{end}}
+  </div>
+  {{end}}
+</details>
+{{end}}
+{{end}}

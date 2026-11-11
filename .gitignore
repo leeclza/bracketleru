@@ -1,0 +1,5 @@
+data/
+*.exe
+.env
+.vercel
+*.exe~

@@ -58,7 +58,7 @@
 
   <details class="side-section">
     <summary>⚙️ Reset / hapus</summary>
-    <form method="post" action="/t/{{.T.ID}}/reset" data-confirm="Semua skor bakal dihapus dan bracket balik ke awal." data-confirm-btn="Ya, reset" data-ok="Bracket direset">
+    <form method="post" action="/t/{{.T.ID}}/reset" data-confirm="Semua skor bakal dihapus dan bracket balik ke awal." data-confirm-btn="Ya, reset" data-ok="Bracket direset" class="action-card">
       <label class="check"><input type="checkbox" name="shuffle"> Acak ulang seed</label>
       <button class="btn big">↺ Reset bracket</button>
     </form>

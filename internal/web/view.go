@@ -3,6 +3,7 @@ package web
 import (
 	"fmt"
 	"html/template"
+	"sort"
 	"strings"
 
 	"bracketleru/internal/bracket"
@@ -237,7 +238,67 @@ func buildView(t *bracket.Tournament, admin bool) pageView {
 		}
 		v.Podium = append(v.Podium, podiumView{Place: i + 1, Names: strings.Join(names, " & ")})
 	}
+	if complete {
+		v.Podium = append(v.Podium, restPlaces(t, b, places)...)
+	}
 	return v
+}
+
+// restPlaces nyusun peringkat peserta sisanya (di luar podium). Round robin /
+// swiss pakai klasemen; format gugur diurutkan dari jumlah kemenangan, yang
+// sama jumlahnya berbagi peringkat.
+func restPlaces(t *bracket.Tournament, b *bracket.Built, podium [3][]int) []podiumView {
+	in := map[int]bool{}
+	next := 1
+	for _, ps := range podium {
+		for _, p := range ps {
+			in[p] = true
+		}
+		if len(ps) > 0 {
+			next += len(ps)
+		}
+	}
+	var rest []int
+	if t.Format == bracket.RoundRobin || t.Format == bracket.Swiss {
+		all := make([]int, len(t.Participants))
+		for i := range all {
+			all[i] = i
+		}
+		for _, s := range t.Standings(b.Matches, all) {
+			if !in[s.Player] {
+				rest = append(rest, s.Player)
+			}
+		}
+		var out []podiumView
+		for i, p := range rest {
+			out = append(out, podiumView{Place: next + i, Names: t.PlayerName(p)})
+		}
+		return out
+	}
+	wins := map[int]int{}
+	for _, m := range b.Matches {
+		if m.Done && !isBye(m) && m.Winner >= 0 {
+			wins[m.Winner]++
+		}
+	}
+	for p := range t.Participants {
+		if !in[p] {
+			rest = append(rest, p)
+		}
+	}
+	sort.SliceStable(rest, func(i, j int) bool { return wins[rest[i]] > wins[rest[j]] })
+	var out []podiumView
+	for i := 0; i < len(rest); {
+		j := i
+		var names []string
+		for j < len(rest) && wins[rest[j]] == wins[rest[i]] {
+			names = append(names, t.PlayerName(rest[j]))
+			j++
+		}
+		out = append(out, podiumView{Place: next + i, Names: strings.Join(names, " & ")})
+		i = j
+	}
+	return out
 }
 
 func boardBlock(id, title string, b *bracket.Built, sectionOf func(*bracket.Section) *sectionView, main []string, final string) blockView {
@@ -292,6 +353,9 @@ var funcs = template.FuncMap{
 		return m
 	},
 	"medal": func(place int) string {
+		if place > 3 {
+			return fmt.Sprintf("#%d", place)
+		}
 		return [...]string{"🥇", "🥈", "🥉"}[place-1]
 	},
 	"formatName": func(f bracket.Format) string { return bracket.FormatNames[f] },

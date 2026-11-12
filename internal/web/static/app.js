@@ -52,9 +52,13 @@
     document.addEventListener("click", (e) => {
       if (e.target.closest("[data-close]")) { closeAll(); return; }
       const open = document.querySelector(".match[open]");
-      // klik di area gelap (di luar dialog & kartunya) = tutup
-      if (open && !e.target.closest(".score-pop") && !open.querySelector("summary").contains(e.target)) closeAll();
-    });
+      // klik di mana pun di luar dialog = cuma nutup, gak ngebuka kartu lain
+      if (open && !e.target.closest(".score-pop")) {
+        e.preventDefault();
+        e.stopPropagation();
+        closeAll();
+      }
+    }, true);
     document.addEventListener("keydown", (e) => { if (e.key === "Escape") closeAll(); });
 
     // dropdown akun: tutup kalau klik di luar / tekan Esc

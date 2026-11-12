@@ -37,7 +37,7 @@ import (
 const (
 	sessionCookie = "bl_session"
 	stateCookie   = "bl_oauth_state"
-	sessionTTL    = 30 * 24 * time.Hour
+	sessionTTL    = 7 * 24 * time.Hour // sesi hangus kalau 7 hari gak buka web
 )
 
 type User struct {
@@ -155,6 +155,10 @@ func (s *server) currentUser(c *gin.Context) *User {
 	var u User
 	if json.Unmarshal(payload, &u) != nil || u.ID == "" || time.Now().Unix() > u.Exp || !s.auth.emailAllowed(u.Email) {
 		return nil
+	}
+	// sliding session: tiap buka web (maks sekali sehari) masa berlakunya diperpanjang lagi 7 hari
+	if time.Until(time.Unix(u.Exp, 0)) < sessionTTL-24*time.Hour {
+		s.setSession(c, &u)
 	}
 	return &u
 }

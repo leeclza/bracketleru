@@ -113,3 +113,24 @@ func TestSwissNoRematch(t *testing.T) {
 		}
 	}
 }
+
+func TestEditLockedAfterScore(t *testing.T) {
+	tr, _ := New("x", "", Single, []string{"Andi", "Budi", "Citra", "Dewi"}, Settings{}, false)
+	if err := tr.Edit("x", "", []string{"Andi", "Budi", "Citra", "Dewo"}); err != nil {
+		t.Fatal("sebelum ada skor harusnya boleh ganti nama:", err)
+	}
+	m := tr.Build().Matches[0]
+	if err := tr.SetResult(m.ID, 2, 1); err != nil {
+		t.Fatal(err)
+	}
+	if err := tr.Edit("y", "Tekken", []string{"Andi", "Budi", "Citra", "Dewi"}); err == nil {
+		t.Fatal("habis ada skor, ganti nama peserta harusnya ditolak")
+	}
+	if err := tr.Edit("Nama Baru", "Tekken", tr.Participants); err != nil || tr.Name != "Nama Baru" {
+		t.Fatal("ganti nama turnamen/game harusnya tetap boleh:", err)
+	}
+	tr.Reset(false)
+	if err := tr.Edit("Nama Baru", "", []string{"A", "B", "C", "D"}); err != nil {
+		t.Fatal("habis reset harusnya boleh ganti nama lagi:", err)
+	}
+}

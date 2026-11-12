@@ -7,7 +7,7 @@
       {{if .T.Game}}<span class="tag">🎮 {{.T.Game}}</span>{{end}}
       <span class="tag">{{.T.FormatName}}</span>
       <span class="tag">{{len .T.Participants}} peserta</span>
-      {{if .View.Complete}}<span class="tag ok">Selesai</span>{{else}}<span class="tag live">{{.View.Progress}}</span>{{end}}
+      {{if .View.Complete}}<span class="tag ok">Selesai</span>{{else}}<span class="tag live">{{.View.Progress}}</span>{{if .View.Remaining}}<span class="tag">Tersisa {{.View.Remaining}} peserta</span>{{end}}{{end}}
     </p>
   </div>
 
@@ -37,7 +37,6 @@
 
   {{if .Admin}}
   <p class="hint">Klik kartu pertandingan di bracket buat isi / ubah skor.</p>
-  <p class="hint expiry">⏳ Dihapus otomatis <span class="countdown" data-expires="{{.Expires}}" data-prefix="dalam ">…</span> kalau gak ada perubahan (7 hari sejak update terakhir).</p>
 
   <details class="side-section" open>
     <summary>🔗 Link tonton</summary>
@@ -50,21 +49,20 @@
       <label class="field"><span>Nama turnamen</span><input name="name" value="{{.T.Name}}" maxlength="80" required></label>
       <label class="field"><span>Game</span><input name="game" value="{{.T.Game}}" maxlength="60"></label>
       <label class="field"><span>Peserta <small>(urutan = seed, jumlah tetap)</small></span>
-        <textarea name="participants" rows="8">{{range .T.Participants}}{{.}}
+        <textarea name="participants" rows="8"{{if .T.HasResults}} readonly class="locked"{{end}}>{{range .T.Participants}}{{.}}
 {{end}}</textarea></label>
+      {{if .T.HasResults}}<p class="hint lock-hint">🔒 Nama peserta dikunci karena sudah ada skor. Reset bracket dulu (di bagian Reset / hapus) kalau mau ganti.</p>{{end}}
       <button class="btn primary big">Simpan perubahan</button>
     </form>
   </details>
 
   <details class="side-section">
     <summary>⚙️ Reset / hapus</summary>
-    <form method="post" action="/t/{{.T.ID}}/reset">
+    <form method="post" action="/t/{{.T.ID}}/reset" data-confirm="Semua skor bakal dihapus dan bracket balik ke awal." data-confirm-btn="Ya, reset" data-ok="Bracket direset">
       <label class="check"><input type="checkbox" name="shuffle"> Acak ulang seed</label>
-      <label class="check"><input type="checkbox" required> Yakin hapus semua skor</label>
       <button class="btn big">↺ Reset bracket</button>
     </form>
-    <form method="post" action="/t/{{.T.ID}}/delete" class="sep">
-      <label class="check"><input type="checkbox" required> Yakin hapus permanen</label>
+    <form method="post" action="/t/{{.T.ID}}/delete" class="sep" data-confirm="Turnamen ini bakal dihapus permanen dan gak bisa dikembalikan." data-confirm-btn="Ya, hapus" data-ok="Turnamen dihapus">
       <button class="btn danger big">🗑 Hapus turnamen</button>
     </form>
   </details>

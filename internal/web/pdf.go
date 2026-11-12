@@ -30,6 +30,8 @@ func (s *server) pdf(c *gin.Context) {
 		pdf.SetFont("Helvetica", "I", 8)
 		pdf.SetTextColor(140, 140, 140)
 		pdf.CellFormat(0, 6, fmt.Sprintf("Bracket Leru  -  halaman %d", pdf.PageNo()), "", 0, "C", false, 0, "")
+		pdf.SetY(-7)
+		pdf.CellFormat(0, 4, tr("Made by leeclza · © 2026 · All rights reserved"), "", 0, "C", false, 0, "")
 	})
 	pdf.AddPage()
 

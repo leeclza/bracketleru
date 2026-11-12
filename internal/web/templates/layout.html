@@ -17,9 +17,14 @@
     <a href="/" class="logo">Bracket<span>Leru</span></a>
     <div class="nav-right">
       {{if .User}}
-      <a href="/" class="btn small">+ Turnamen baru</a>
-      <a href="/profile" class="who" title="{{.User.Email}}">@{{.User.Username}}</a>
-      <form method="post" action="/logout"><button class="btn small">Logout</button></form>
+      <details class="user-menu">
+        <summary class="btn small" title="{{.User.Email}}">@{{.User.Username}} <span class="caret">▾</span></summary>
+        <div class="menu" role="menu">
+          <a href="/profile" role="menuitem">👤 Profile</a>
+          <a href="/" role="menuitem">＋ Turnamen baru</a>
+          <form method="post" action="/logout"><button class="menu-danger" role="menuitem">⎋ Logout</button></form>
+        </div>
+      </details>
       {{else if .AuthReady}}
       <a href="/login" class="btn small primary">Login Google</a>
       {{end}}
@@ -30,6 +35,7 @@
 
 {{define "foot"}}
   </main>
+  <footer class="site-footer">Made by leeclza · © 2026 · All rights reserved</footer>
 </body>
 </html>
 {{end}}

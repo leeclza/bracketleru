@@ -57,15 +57,23 @@
     });
     document.addEventListener("keydown", (e) => { if (e.key === "Escape") closeAll(); });
 
+    // dropdown akun: tutup kalau klik di luar / tekan Esc
+    document.addEventListener("click", (e) => {
+      document.querySelectorAll(".user-menu[open]").forEach((m) => { if (!m.contains(e.target)) m.open = false; });
+    });
+    document.addEventListener("keydown", (e) => {
+      if (e.key === "Escape") document.querySelectorAll(".user-menu[open]").forEach((m) => (m.open = false));
+    });
+
     // ---- countdown hapus otomatis (data-expires = unix ms) ----
     const fmtLeft = (ms) => {
       if (ms <= 0) return "sebentar lagi";
       const s = Math.floor(ms / 1000);
-      const d = Math.floor(s / 86400), h = Math.floor((s % 86400) / 3600), m = Math.floor((s % 3600) / 60), sec = s % 60;
+      const d = Math.floor(s / 86400), h = Math.floor((s % 86400) / 3600);
+      if (!d && !h) return "kurang dari 1 jam";
       const p = [];
       if (d) p.push(d + " hari");
-      if (d || h) p.push(h + " jam");
-      p.push(m + " menit", sec + " detik");
+      if (h) p.push(h + " jam");
       return p.join(" ");
     };
     const tick = () => document.querySelectorAll("[data-expires]").forEach((el) => {
@@ -73,7 +81,55 @@
       el.textContent = prefix + fmtLeft(Number(el.dataset.expires) - Date.now());
     });
     tick();
-    setInterval(tick, 1000);
+    setInterval(tick, 60000);
+
+    // ---- toast pojok kanan bawah: hijau = berhasil, merah = gagal ----
+    function toast(msg, ok) {
+      let box = document.querySelector(".toasts");
+      if (!box) { box = document.createElement("div"); box.className = "toasts"; document.body.appendChild(box); }
+      const t = document.createElement("div");
+      t.className = "toast " + (ok ? "ok" : "fail");
+      t.setAttribute("role", ok ? "status" : "alert");
+      t.textContent = (ok ? "✓ " : "✕ ") + msg;
+      box.appendChild(t);
+      setTimeout(() => { t.classList.add("hide"); setTimeout(() => t.remove(), 300); }, 3000);
+    }
+    // toast titipan dari halaman sebelumnya (misal habis hapus turnamen)
+    try {
+      const pending = sessionStorage.getItem("toast");
+      if (pending) { sessionStorage.removeItem("toast"); toast(pending, true); }
+    } catch (_) {}
+
+    // ---- konfirmasi "yakin?" buat aksi berbahaya (form[data-confirm]) ----
+    document.addEventListener("submit", (e) => {
+      const f = e.target;
+      if (!f.dataset || !f.dataset.confirm || f.dataset.confirmed) return;
+      e.preventDefault();
+      e.stopImmediatePropagation();
+      const wrap = document.createElement("div");
+      wrap.className = "confirm-backdrop";
+      wrap.innerHTML = '<div class="confirm-card" role="alertdialog" aria-modal="true">' +
+        '<p class="confirm-title">Anda yakin?</p><p class="confirm-text"></p>' +
+        '<div class="confirm-actions"><button type="button" class="btn" data-no>Batal</button>' +
+        '<button type="button" class="btn danger" data-yes></button></div></div>';
+      wrap.querySelector(".confirm-text").textContent = f.dataset.confirm;
+      wrap.querySelector("[data-yes]").textContent = f.dataset.confirmBtn || "Ya, lanjut";
+      const close = () => { wrap.remove(); document.removeEventListener("keydown", onKey); };
+      const onKey = (ev) => { if (ev.key === "Escape") close(); };
+      wrap.addEventListener("click", (ev) => {
+        if (ev.target === wrap || ev.target.closest("[data-no]")) close();
+        else if (ev.target.closest("[data-yes]")) {
+          close();
+          if (/\/delete$/.test(f.action)) { try { sessionStorage.setItem("toast", f.dataset.ok || "Berhasil"); } catch (_) {} }
+          f.dataset.confirmed = "1";
+          f.requestSubmit();
+          delete f.dataset.confirmed;
+        }
+      });
+      document.addEventListener("keydown", onKey);
+      document.body.appendChild(wrap);
+      wrap.querySelector("[data-no]").focus();
+    }, true);
 
     // ---- halaman turnamen: simpan skor & aksi admin tanpa reload ----
     // Form POST dikirim lewat fetch. fetch otomatis ngikutin redirect ke
@@ -106,14 +162,19 @@
       redraw();
     }
 
-    async function send(url, opts, busyEl) {
+    async function send(url, opts, busyEl, okMsg) {
       if (busyEl) busyEl.disabled = true;
       main.classList.add("busy");
       try {
         const res = await fetch(url, Object.assign({ credentials: "same-origin" }, opts));
+        const err = new URL(res.url).searchParams.get("err");
         await swapFrom(res);
+        if (err) {
+          main.querySelectorAll(".alert").forEach((a) => a.remove()); // pesan error cukup di toast
+          toast(err, false);
+        } else if (okMsg) toast(okMsg, true);
       } catch (_) {
-        alert("Gagal terhubung ke server, coba lagi.");
+        toast("Gagal terhubung ke server, coba lagi.", false);
         if (busyEl) busyEl.disabled = false;
       } finally {
         main.classList.remove("busy");
@@ -125,7 +186,8 @@
         const f = e.target;
         if ((f.method || "").toLowerCase() !== "post" || /\/delete$/.test(f.action)) return; // hapus = pindah halaman biasa
         e.preventDefault();
-        send(f.action, { method: "POST", body: new URLSearchParams(new FormData(f)) }, f.querySelector("button"));
+        const ok = f.dataset.ok || (f.classList.contains("score-form") ? "Skor disimpan" : "Perubahan disimpan");
+        send(f.action, { method: "POST", body: new URLSearchParams(new FormData(f)) }, f.querySelector("button"), ok);
       });
       main.addEventListener("click", (e) => {
         const b = e.target.closest("[data-reload]");

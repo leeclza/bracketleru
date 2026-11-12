@@ -82,6 +82,7 @@ type pageView struct {
 	Podium       []podiumView
 	Complete     bool
 	Progress     string // misal "12/15 pertandingan"
+	Remaining    int    // peserta yang belum gugur (khusus single/double elim, 0 = gak ditampilin)
 	CanSwissNext bool
 	SwissInfo    string
 	CanPlayoff   bool
@@ -106,6 +107,23 @@ func buildView(t *bracket.Tournament, admin bool) pageView {
 		}
 	}
 	v.Progress = fmt.Sprintf("%d/%d pertandingan selesai", done, total)
+
+	// sisa peserta yang belum gugur (single: kalah 1x gugur, double: 2x)
+	if lives := map[bracket.Format]int{bracket.Single: 1, bracket.Double: 2}[t.Format]; lives > 0 {
+		losses := map[int]int{}
+		for _, m := range b.Matches {
+			if m.Done && !m.Hidden && !isBye(m) && m.Loser >= 0 {
+				losses[m.Loser]++
+			}
+		}
+		out := 0
+		for _, n := range losses {
+			if n >= lives {
+				out++
+			}
+		}
+		v.Remaining = len(t.Participants) - out
+	}
 
 	sectionOf := func(s *bracket.Section) *sectionView {
 		sv := &sectionView{Title: s.Title, Bracket: s.Elim}

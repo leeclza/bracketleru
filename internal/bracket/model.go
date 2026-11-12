@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"math/rand/v2"
+	"slices"
 	"strings"
 	"time"
 )
@@ -289,6 +290,12 @@ func (t *Tournament) Edit(name, game string, participants []string) error {
 	if len(names) != len(t.Participants) {
 		return fmt.Errorf("jumlah peserta harus tetap %d (cuma bisa ganti nama)", len(t.Participants))
 	}
+	if t.HasResults() && !slices.Equal(names, t.Participants) {
+		return errors.New("nama peserta gak bisa diubah karena sudah ada skor. Reset bracket dulu")
+	}
 	t.Name, t.Game, t.Participants = name, strings.TrimSpace(game), names
 	return nil
 }
+
+// HasResults: sudah ada skor yang diisi (nama peserta dikunci sampai di-reset).
+func (t *Tournament) HasResults() bool { return len(t.Results) > 0 }

@@ -28,7 +28,7 @@ func (s *server) pdf(c *gin.Context) {
 	pdf.SetFooterFunc(func() {
 		pdf.SetY(-12)
 		pdf.SetFont("Helvetica", "I", 8)
-		pdf.SetTextColor(140, 140, 140)
+		pdf.SetTextColor(0, 0, 0)
 		pdf.CellFormat(0, 6, fmt.Sprintf("Bracket Leru  -  halaman %d", pdf.PageNo()), "", 0, "C", false, 0, "")
 		pdf.SetY(-7)
 		pdf.CellFormat(0, 4, tr("Made by leeclza · © 2026 · All rights reserved"), "", 0, "C", false, 0, "")
@@ -40,7 +40,7 @@ func (s *server) pdf(c *gin.Context) {
 	pdf.SetTextColor(0, 0, 0)
 	pdf.MultiCell(0, 10, tr(t.Name), "", "C", false)
 	pdf.SetFont("Helvetica", "", 11)
-	pdf.SetTextColor(100, 100, 100)
+	pdf.SetTextColor(0, 0, 0)
 	info := []string{t.FormatName(), fmt.Sprintf("%d peserta", len(t.Participants)), t.CreatedAt.Format("02 Jan 2006")}
 	if t.Game != "" {
 		info = append([]string{t.Game}, info...)
@@ -52,26 +52,36 @@ func (s *server) pdf(c *gin.Context) {
 	heading(pdf, "Hasil Akhir")
 	if !v.Complete {
 		pdf.SetFont("Helvetica", "I", 10)
-		pdf.SetTextColor(60, 60, 60)
+		pdf.SetTextColor(0, 0, 0)
 		pdf.CellFormat(0, 7, tr("Turnamen belum selesai - hasil di bawah adalah sementara ("+v.Progress+")."), "", 1, "L", false, 0, "")
 		pdf.Ln(1)
 	}
-	colors := [][3]int{{0, 0, 0}, {80, 80, 80}, {140, 140, 140}}
-	labels := []string{"Juara 1", "Juara 2", "Juara 3"}
+	pdf.SetDrawColor(0, 0, 0)
+	pdf.SetLineWidth(0.3)
 	for _, p := range v.Podium {
-		col := colors[p.Place-1]
-		pdf.SetFillColor(col[0], col[1], col[2])
-		pdf.SetTextColor(255, 255, 255)
-		pdf.SetFont("Helvetica", "B", 11)
-		pdf.CellFormat(28, 10, labels[p.Place-1], "", 0, "C", true, 0, "")
-		pdf.SetTextColor(20, 20, 20)
-		pdf.SetFont("Helvetica", "B", 13)
-		pdf.CellFormat(0, 10, "  "+tr(p.Names), "", 1, "L", false, 0, "")
+		h := 9.0
+		if p.Place <= 3 {
+			// juara 1-3: label hitam teks putih
+			pdf.SetFillColor(0, 0, 0)
+			pdf.SetTextColor(255, 255, 255)
+			pdf.SetFont("Helvetica", "B", 11)
+			pdf.CellFormat(28, h, fmt.Sprintf("Juara %d", p.Place), "1", 0, "C", true, 0, "")
+			pdf.SetFont("Helvetica", "B", 13)
+		} else {
+			// peringkat lain: label bergaris tepi, lebih kecil
+			h = 7
+			pdf.SetTextColor(0, 0, 0)
+			pdf.SetFont("Helvetica", "B", 10)
+			pdf.CellFormat(28, h, fmt.Sprintf("#%d", p.Place), "1", 0, "C", false, 0, "")
+			pdf.SetFont("Helvetica", "", 11)
+		}
+		pdf.SetTextColor(0, 0, 0)
+		pdf.CellFormat(0, h, "  "+tr(p.Names), "", 1, "L", false, 0, "")
 		pdf.Ln(1.5)
 	}
 	if len(v.Podium) == 0 {
 		pdf.SetFont("Helvetica", "", 10)
-		pdf.SetTextColor(100, 100, 100)
+		pdf.SetTextColor(0, 0, 0)
 		pdf.CellFormat(0, 7, "Belum ada juara.", "", 1, "L", false, 0, "")
 	}
 	pdf.Ln(4)
@@ -122,24 +132,24 @@ func standingsTable(pdf *fpdf.Fpdf, tr func(string) string, tv *tableView) {
 		widths = append(widths, 14)
 	}
 	pdf.SetFont("Helvetica", "B", 9)
-	pdf.SetFillColor(230, 230, 230)
+	pdf.SetFillColor(0, 0, 0) // sama dgn warna teks: fpdf gak perlu nyetel warna ulang tiap sel
 	pdf.SetTextColor(0, 0, 0)
+	pdf.SetDrawColor(0, 0, 0)
+	pdf.SetLineWidth(0.3)
 	for i, h := range cols {
 		align := "C"
 		if i == 1 {
 			align = "L"
 		}
-		pdf.CellFormat(widths[i], 7, h, "", 0, align, true, 0, "")
+		pdf.CellFormat(widths[i], 7, h, "B", 0, align, false, 0, "")
 	}
 	pdf.Ln(-1)
-	pdf.SetFont("Helvetica", "", 9)
-	for i, r := range tv.Rows {
-		fill := i%2 == 1
-		pdf.SetFillColor(250, 250, 250)
-		pdf.SetTextColor(20, 20, 20)
+	for _, r := range tv.Rows {
+		// yang lolos ditebelin (tanpa warna latar biar tajam di printer)
 		if r.Qualify {
-			pdf.SetFillColor(238, 238, 238)
-			fill = true
+			pdf.SetFont("Helvetica", "B", 9)
+		} else {
+			pdf.SetFont("Helvetica", "", 9)
 		}
 		vals := []string{fmt.Sprint(r.Rank), tr(r.Name), fmt.Sprint(r.Played), fmt.Sprint(r.W), fmt.Sprint(r.D),
 			fmt.Sprint(r.L), fmt.Sprintf("%d-%d", r.SF, r.SA), r.Diff, fmt.Sprint(r.Pts)}
@@ -151,7 +161,7 @@ func standingsTable(pdf *fpdf.Fpdf, tr func(string) string, tv *tableView) {
 			if j == 1 {
 				align = "L"
 			}
-			pdf.CellFormat(widths[j], 6.5, val, "", 0, align, fill, 0, "")
+			pdf.CellFormat(widths[j], 6.5, val, "", 0, align, false, 0, "")
 		}
 		pdf.Ln(-1)
 	}
@@ -169,8 +179,9 @@ func matchList(pdf *fpdf.Fpdf, tr func(string) string, sv *sectionView) {
 		if len(rows) == 0 {
 			continue
 		}
+		pdf.SetFillColor(0, 0, 0) // sama dgn warna teks: hemat ukuran file
+		pdf.SetTextColor(0, 0, 0)
 		pdf.SetFont("Helvetica", "B", 10)
-		pdf.SetTextColor(80, 80, 80)
 		pdf.CellFormat(0, 7, tr(r.Title), "", 1, "L", false, 0, "")
 		for _, m := range rows {
 			score := "vs"
@@ -178,13 +189,10 @@ func matchList(pdf *fpdf.Fpdf, tr func(string) string, sv *sectionView) {
 				score = fmt.Sprintf("%d - %d", m.ScoreA, m.ScoreB)
 			}
 			pdf.SetFont("Helvetica", "", 10)
-			pdf.SetTextColor(150, 150, 150)
-			pdf.CellFormat(12, 6.5, fmt.Sprintf("#%d", m.Num), "", 0, "L", false, 0, "")
-			sideCell(pdf, tr, m.A, 70, "R")
+			sideCell(pdf, tr, m.A, 76, "R")
 			pdf.SetFont("Helvetica", "B", 10)
-			pdf.SetTextColor(0, 0, 0)
 			pdf.CellFormat(28, 6.5, score, "", 0, "C", false, 0, "")
-			sideCell(pdf, tr, m.B, 70, "L")
+			sideCell(pdf, tr, m.B, 76, "L")
 			pdf.Ln(-1)
 		}
 		pdf.Ln(2)
@@ -193,14 +201,13 @@ func matchList(pdf *fpdf.Fpdf, tr func(string) string, sv *sectionView) {
 }
 
 func sideCell(pdf *fpdf.Fpdf, tr func(string) string, s sideView, w float64, align string) {
+	// semua hitam pekat (abu-abu jadi buram di printer); pemenang tebal,
+	// yang belum ketahuan (placeholder) miring
 	style := ""
-	pdf.SetTextColor(20, 20, 20)
 	if s.Win {
 		style = "B"
-		pdf.SetTextColor(0, 0, 0)
-	}
-	if s.Placeholder || s.Lose {
-		pdf.SetTextColor(140, 140, 140)
+	} else if s.Placeholder {
+		style = "I"
 	}
 	pdf.SetFont("Helvetica", style, 10)
 	pdf.CellFormat(w, 6.5, tr(s.Name), "", 0, align, false, 0, "")

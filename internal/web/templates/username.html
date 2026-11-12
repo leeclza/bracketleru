@@ -1,7 +1,9 @@
-{{template "head" (dict "Title" "Pilih username")}}
+{{template "head" (dict "Title" "Username")}}
 <section class="login-box">
-  <h1>Satu langkah lagi</h1>
-  <p class="hint">Login sebagai <b>{{.User.Email}}</b>.<br>Isi username kamu dulu sebelum lanjut.</p>
+  {{if .Edit}}<h1>Ganti username</h1>
+  <p class="hint">Username sekarang: <b>@{{.User.Username}}</b></p>
+  {{else}}<h1>Satu langkah lagi</h1>
+  <p class="hint">Login sebagai <b>{{.User.Email}}</b>.<br>Isi username kamu dulu sebelum lanjut.</p>{{end}}
   {{if .Error}}<div class="alert">{{.Error}}</div>{{end}}
   <form method="post" action="/username">
     <input type="hidden" name="next" value="{{.Next}}">
@@ -9,8 +11,9 @@
       <input name="username" value="{{.Value}}" placeholder="mis. leon_123" minlength="3" maxlength="20"
              pattern="[a-zA-Z0-9_.]{3,20}" autocomplete="username" autofocus required></label>
     <p class="hint">3-20 karakter: huruf, angka, titik, underscore. Disimpan sebagai huruf kecil.</p>
-    <button class="btn primary big" type="submit">Simpan & lanjut</button>
+    <button class="btn primary big" type="submit">{{if .Edit}}Simpan{{else}}Simpan & lanjut{{end}}</button>
   </form>
-  <form method="post" action="/logout" class="sep"><button class="btn ghost-btn">Bukan kamu? Logout</button></form>
+  {{if .Edit}}<a class="btn ghost-btn" href="{{.Next}}">← Batal</a>
+  {{else}}<form method="post" action="/logout" class="sep"><button class="btn ghost-btn">Bukan kamu? Logout</button></form>{{end}}
 </section>
 {{template "foot"}}

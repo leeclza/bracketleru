@@ -299,20 +299,24 @@ func (s *server) usernamePage(c *gin.Context) {
 	}
 	next := safeNext(c.Query("next"))
 	if c.Request.Method == http.MethodGet {
-		if u.Username != "" {
+		if u.Username != "" && c.Query("edit") != "1" {
 			c.Redirect(http.StatusSeeOther, next)
 			return
 		}
-		c.HTML(http.StatusOK, "username.html", gin.H{"User": u, "Next": next})
+		c.HTML(http.StatusOK, "username.html", gin.H{"User": u, "Next": next, "Edit": u.Username != "", "Value": u.Username})
 		return
 	}
 	next = safeNext(c.PostForm("next"))
 	name := strings.ToLower(strings.TrimSpace(c.PostForm("username")))
 	show := func(msg string) {
-		c.HTML(http.StatusOK, "username.html", gin.H{"User": u, "Next": next, "Value": name, "Error": msg})
+		c.HTML(http.StatusOK, "username.html", gin.H{"User": u, "Next": next, "Value": name, "Error": msg, "Edit": u.Username != ""})
 	}
 	if !validUsername.MatchString(name) {
 		show("Username 3-20 karakter, hanya huruf kecil, angka, titik, dan underscore.")
+		return
+	}
+	if name == u.Username {
+		c.Redirect(http.StatusSeeOther, next)
 		return
 	}
 	err := s.store.SetUsername(c.Request.Context(), u.ID, u.Email, name)

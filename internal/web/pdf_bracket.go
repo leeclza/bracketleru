@@ -1,6 +1,7 @@
 package web
 
 import (
+	"math"
 	"strconv"
 	"strings"
 
@@ -167,8 +168,8 @@ func drawBoard(pdf *fpdf.Fpdf, tr func(string) string, title string, main []*sec
 	Y := func(v float64) float64 { return areaY + v*s }
 	font := func(style string, size float64) {
 		sz := size * s
-		if sz < 3.5 {
-			sz = 3.5
+		if sz < 6 {
+			sz = 6
 		}
 		pdf.SetFont("Helvetica", style, sz)
 	}
@@ -182,13 +183,13 @@ func drawBoard(pdf *fpdf.Fpdf, tr func(string) string, title string, main []*sec
 	}
 	for _, t := range L.roundTitles {
 		font("B", 8)
-		pdf.SetTextColor(110, 110, 110)
+		pdf.SetTextColor(0, 0, 0)
 		pdf.SetXY(X(t.x), Y(t.y))
 		pdf.CellFormat(bBoxW*s, bTitleH*s*0.7, tr(t.text), "", 0, "C", false, 0, "")
 	}
 
 	// garis penghubung dulu, kartu digambar di atasnya
-	pdf.SetLineWidth(0.3 * s)
+	pdf.SetLineWidth(math.Max(0.3*s, 0.3))
 	for _, id := range L.order {
 		p := L.pos[id]
 		for _, f := range parseFeeds(p.m.Feeds) {
@@ -204,8 +205,10 @@ func drawBoard(pdf *fpdf.Fpdf, tr func(string) string, title string, main []*sec
 			mx := x2 - bColGap/2
 			if src.m.Done {
 				pdf.SetDrawColor(0, 0, 0)
+				pdf.SetDashPattern(nil, 0)
 			} else {
-				pdf.SetDrawColor(170, 170, 170)
+				pdf.SetDrawColor(0, 0, 0)
+				pdf.SetDashPattern([]float64{1, 1}, 0)
 			}
 			pdf.Line(X(x1), Y(y1), X(mx), Y(y1))
 			pdf.Line(X(mx), Y(y1), X(mx), Y(y2))
@@ -218,23 +221,21 @@ func drawBoard(pdf *fpdf.Fpdf, tr func(string) string, title string, main []*sec
 		if p.m.Ghost {
 			continue
 		}
+		pdf.SetDashPattern(nil, 0)
 		pdf.SetDrawColor(0, 0, 0)
-		pdf.SetLineWidth(0.25 * s)
-		pdf.SetFillColor(255, 255, 255)
-		pdf.Rect(X(p.x), Y(p.y), bBoxW*s, bBoxH*s, "FD")
+		pdf.SetLineWidth(math.Max(0.25*s, 0.25))
+		pdf.SetFillColor(0, 0, 0)
+		pdf.Rect(X(p.x), Y(p.y), bBoxW*s, bBoxH*s, "D")
 		for i, sd := range []sideView{p.m.A, p.m.B} {
 			ry := p.y + float64(i)*bRowH
 			if i == 1 {
 				pdf.Line(X(p.x), Y(ry), X(p.x+bBoxW), Y(ry))
 			}
 			style := ""
-			pdf.SetTextColor(20, 20, 20)
 			if sd.Win {
 				style = "B"
-				pdf.SetTextColor(0, 0, 0)
-			}
-			if sd.Lose || sd.Placeholder {
-				pdf.SetTextColor(150, 150, 150)
+			} else if sd.Placeholder {
+				style = "I"
 			}
 			font(style, 8.5)
 			pdf.SetXY(X(p.x+1.5), Y(ry))
@@ -242,17 +243,16 @@ func drawBoard(pdf *fpdf.Fpdf, tr func(string) string, title string, main []*sec
 			// kotak skor: pemenang hitam, teks putih
 			pdf.SetXY(X(p.x+bBoxW-bScoreW), Y(ry))
 			if sd.Win {
-				pdf.SetFillColor(0, 0, 0)
 				pdf.SetTextColor(255, 255, 255)
 				pdf.CellFormat(bScoreW*s, bRowH*s, sd.Score, "", 0, "C", true, 0, "")
+				pdf.SetTextColor(0, 0, 0)
 			} else {
-				pdf.SetFillColor(240, 240, 240)
-				pdf.CellFormat(bScoreW*s, bRowH*s, sd.Score, "", 0, "C", true, 0, "")
+				pdf.CellFormat(bScoreW*s, bRowH*s, sd.Score, "", 0, "C", false, 0, "")
 			}
 		}
 		// nomor match kecil di kiri atas kartu
 		font("", 5.5)
-		pdf.SetTextColor(150, 150, 150)
+		pdf.SetTextColor(0, 0, 0)
 		pdf.SetXY(X(p.x), Y(p.y-3))
 		pdf.CellFormat(10*s, 3*s, "#"+strconv.Itoa(p.m.Num), "", 0, "L", false, 0, "")
 	}
